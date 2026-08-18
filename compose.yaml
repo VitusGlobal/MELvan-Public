@@ -1,0 +1,63 @@
+name: melvan
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: melvan
+      POSTGRES_USER: melvan
+      POSTGRES_PASSWORD: local-development-only
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U melvan -d melvan"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    ports:
+      - "5432:5432"
+    volumes:
+      - melvan-postgres:/var/lib/postgresql/data
+      - ./docker/postgres-init:/docker-entrypoint-initdb.d:ro
+
+  azurite:
+    image: mcr.microsoft.com/azure-storage/azurite:3.35.0
+    command: azurite-blob --blobHost 0.0.0.0 --location /data
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "require('http').get('http://127.0.0.1:10000/devstoreaccount1?comp=list',r=>process.exit(r.statusCode<500?0:1)).on('error',()=>process.exit(1))",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    ports:
+      - "10000:10000"
+    volumes:
+      - melvan-azurite:/data
+
+  postgres-check:
+    profiles: ["check"]
+    build:
+      context: .
+      dockerfile: Dockerfile.test
+    depends_on:
+      postgres:
+        condition: service_healthy
+      azurite:
+        condition: service_healthy
+    environment:
+      MELVAN_TEST_POSTGRES_ADMIN_URL: postgresql+psycopg://melvan:local-development-only@postgres:5432/melvan
+      MELVAN_TEST_POSTGRES_URL: postgresql+psycopg://melvan_app:local-runtime-only@postgres:5432/melvan
+      MELVAN_DATABASE_URL: postgresql+psycopg://melvan_app:local-runtime-only@postgres:5432/melvan
+      MELVAN_MIGRATION_DATABASE_URL: postgresql+psycopg://melvan:local-development-only@postgres:5432/melvan
+      MELVAN_DEPLOYMENT_PROFILE: production
+      MELVAN_MODEL_MODE: demo
+      # Azurite's fixed public emulator credential. Never use it for Azure Storage.
+      MELVAN_TEST_AZURITE_CONNECTION_STRING: DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;BlobEndpoint=http://azurite:10000/devstoreaccount1;
+    command: python -m unittest tests.test_relational tests.test_attachment_migration tests.test_media -v
+
+volumes:
+  melvan-postgres:
+  melvan-azurite:

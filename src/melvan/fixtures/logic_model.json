@@ -1,0 +1,118 @@
+{
+  "id": "logic-model-demo-v1",
+  "title": "Community Resilience Learning Program",
+  "version": "1.0",
+  "source": "synthetic-public-fixture",
+  "elements": [
+    {
+      "id": "O1",
+      "type": "Output",
+      "level": "output",
+      "group": "Training",
+      "label": "Training support for community partners completed"
+    },
+    {
+      "id": "O2",
+      "type": "Output",
+      "level": "output",
+      "group": "Research",
+      "label": "Program learning briefs published"
+    },
+    {
+      "id": "O3",
+      "type": "Output",
+      "level": "output",
+      "group": "Research",
+      "label": "Community research fellows recruited"
+    },
+    {
+      "id": "O4",
+      "type": "Output",
+      "level": "output",
+      "group": "Tech",
+      "label": "Secure data platform upgrade completed"
+    },
+    {
+      "id": "O5",
+      "type": "Output",
+      "level": "enabling_output",
+      "group": "Governance",
+      "label": "Program governance charter completed"
+    },
+    {
+      "id": "O6",
+      "type": "Output",
+      "level": "enabling_output",
+      "group": "Monitoring, Evaluation & Learning",
+      "label": "Monitoring, evaluation, and learning plan implemented"
+    },
+    {
+      "id": "O7",
+      "type": "Output",
+      "level": "enabling_output",
+      "group": "Shared terminology",
+      "label": "Shared program terminology guide completed"
+    },
+    {
+      "id": "SO1",
+      "type": "Outcome",
+      "level": "short_term_outcome",
+      "group": "Training",
+      "label": "Improved delivery capacity among community partners"
+    },
+    {
+      "id": "SO2",
+      "type": "Outcome",
+      "level": "short_term_outcome",
+      "group": "Research",
+      "label": "Improved collaboration among researchers, service providers, and technology team members"
+    },
+    {
+      "id": "SO3",
+      "type": "Outcome",
+      "level": "short_term_outcome",
+      "group": "Tech",
+      "label": "Improved capacity of participating organizations to use program data"
+    },
+    {
+      "id": "MO4",
+      "type": "Outcome",
+      "level": "medium_term_outcome",
+      "group": null,
+      "label": "More use of evidence-informed practices and program learning in community services"
+    },
+    {
+      "id": "LO5",
+      "type": "Outcome",
+      "level": "long_term_outcome",
+      "group": null,
+      "label": "Improved quality and coordination of community services"
+    },
+    {
+      "id": "UG1",
+      "type": "Outcome",
+      "level": "ultimate_goal",
+      "group": null,
+      "label": "Improved wellbeing and resilience among participating communities"
+    }
+  ],
+  "relationships": [
+    {"from": "O1", "to": "SO1", "type": "contributes_to"},
+    {"from": "O2", "to": "SO2", "type": "contributes_to"},
+    {"from": "O3", "to": "SO2", "type": "contributes_to"},
+    {"from": "O4", "to": "SO3", "type": "contributes_to"},
+    {"from": "O5", "to": "SO1", "type": "enables"},
+    {"from": "O5", "to": "SO2", "type": "enables"},
+    {"from": "O5", "to": "SO3", "type": "enables"},
+    {"from": "O6", "to": "MO4", "type": "enables"},
+    {"from": "O7", "to": "LO5", "type": "enables"},
+    {"from": "SO1", "to": "MO4", "type": "contributes_to"},
+    {"from": "SO2", "to": "MO4", "type": "contributes_to"},
+    {"from": "SO3", "to": "MO4", "type": "contributes_to"},
+    {"from": "MO4", "to": "LO5", "type": "contributes_to"},
+    {"from": "LO5", "to": "UG1", "type": "contributes_to"}
+  ],
+  "annotations": [
+    "Unexplained triangle and diamond symbols in the source have no processing semantics."
+  ]
+}

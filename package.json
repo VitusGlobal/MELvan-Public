@@ -1,0 +1,12 @@
+{
+  "name": "melvan-browser-tests",
+  "private": true,
+  "version": "0.11.4",
+  "license": "AGPL-3.0-or-later",
+  "scripts": {
+    "test:ui": "node tests/ui-smoke.cjs"
+  },
+  "devDependencies": {
+    "playwright": "1.62.1"
+  }
+}

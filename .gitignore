@@ -1,0 +1,15 @@
+.DS_Store
+.env
+.venv*/
+.venv-dataless-backup/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+data/*.sqlite3
+data/*.db
+data/users.json
+data/logic_models/
+data/backups/
+artifacts/
+build/

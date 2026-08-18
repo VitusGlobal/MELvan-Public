@@ -1,0 +1,55 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "melvan"
+version = "0.11.5"
+description = "Role-aware program monitoring, evaluation, and learning application"
+requires-python = ">=3.12,<3.13"
+license = "AGPL-3.0-or-later"
+license-files = [
+  "LICENSE",
+  "DOCUMENTATION-LICENSE.md",
+  "ASSET-LICENSES.md",
+  "THIRD_PARTY_NOTICES.md",
+]
+dependencies = [
+  "Pillow>=11,<13",
+  "pillow-heif>=1,<2",
+]
+
+[project.optional-dependencies]
+foundry = [
+  "azure-ai-projects>=2.3,<3",
+  "azure-identity>=1.25,<2",
+  "openai>=2.44,<3",
+]
+hosting = [
+  "azure-ai-projects>=2.3,<3",
+  "azure-communication-email>=1.0,<2",
+  "azure-identity>=1.25,<2",
+  "azure-storage-blob>=12.27,<13",
+  "gunicorn>=23,<24",
+  "openai>=2.44,<3",
+]
+production = [
+  "alembic>=1.17,<2",
+  "azure-ai-projects>=2.3,<3",
+  "azure-communication-email>=1.0,<2",
+  "azure-identity>=1.25,<2",
+  "azure-storage-blob>=12.27,<13",
+  "gunicorn>=23,<24",
+  "openai>=2.44,<3",
+  "psycopg[binary]>=3.2,<4",
+  "SQLAlchemy>=2.0,<3",
+]
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+melvan = ["static/*", "static/assets/*", "static/vendor/*", "fixtures/*.json"]

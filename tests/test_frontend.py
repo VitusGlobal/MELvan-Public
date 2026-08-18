@@ -33,18 +33,21 @@ class FrontendContractTestCase(unittest.TestCase):
         self.assertIn("7 days", HTML)
         self.assertIn("28 days", HTML)
         self.assertIn('id="password-screen"', HTML)
-        self.assertIn('id="password-user-guide"', HTML)
+        self.assertIn('id="password-user-guide-acknowledgement"', HTML)
+        self.assertIn('id="user-guide-dialog"', HTML)
+        self.assertIn('id="open-user-guide"', HTML)
         self.assertIn('id="user-guide-acknowledged"', HTML)
         self.assertIn("MELVan is an assistant that helps teams capture", HTML)
         self.assertIn("Do use MELVan if you:", HTML)
         self.assertIn("Don’t use MELVan if you:", HTML)
         self.assertIn(
-            "I acknowledge that I have read the MELVan User Guide.", HTML
+            "I acknowledge that I have read the MELvan", HTML
         )
         self.assertIn("payload.requires_user_guide_acknowledgement", JAVASCRIPT)
         self.assertIn("acknowledgement.required = requiresGuide", JAVASCRIPT)
         self.assertIn("user_guide_acknowledged: Boolean(", JAVASCRIPT)
-        self.assertIn(".login-panel.has-user-guide", CSS)
+        self.assertIn(".user-guide-dialog", CSS)
+        self.assertIn("dialog.showModal()", JAVASCRIPT)
         self.assertNotIn(">Continue<", HTML)
         self.assertIn('aria-live="assertive"', HTML)
         for behavior in ("submitLogin", "submitRecovery", "submitNewPassword", "is-denied"):

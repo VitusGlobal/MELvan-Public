@@ -3,6 +3,13 @@
 This changelog begins with the first reviewed public-release candidate. Private
 development chronology and acceptance records are intentionally excluded.
 
+## 0.11.6 - 2026-08-18
+
+- Completed the first-time password setup journey with a required User Guide
+  acknowledgement immediately above the submit action.
+- Moved the complete User Guide into an accessible linked dialog while keeping
+  password recovery free of the first-time acknowledgement requirement.
+
 ## 0.11.5 - 2026-08-18
 
 - Restored the canonical MELvan product principles and full health-domain

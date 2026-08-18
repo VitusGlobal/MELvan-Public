@@ -74,6 +74,23 @@ function bindLogin() {
   $("#recovery-form").addEventListener("submit", submitRecovery);
   $$("[data-return-login]").forEach((button) => button.addEventListener("click", showLogin));
   $("#password-form").addEventListener("submit", submitNewPassword);
+  $("#open-user-guide").addEventListener("click", openUserGuide);
+  $$("[data-close-user-guide]").forEach((button) => button.addEventListener("click", closeUserGuide));
+  $("#user-guide-dialog").addEventListener("cancel", (event) => {
+    event.preventDefault();
+    closeUserGuide();
+  });
+}
+
+function openUserGuide() {
+  const dialog = $("#user-guide-dialog");
+  dialog.showModal();
+  refreshIcons();
+  $("[data-close-user-guide]", dialog).focus();
+}
+
+function closeUserGuide() {
+  $("#user-guide-dialog").close();
 }
 
 async function submitLogin(event) {
@@ -150,12 +167,13 @@ async function submitRecovery(event) {
 
 function showPasswordChange(payload = {}) {
   const requiresGuide = Boolean(payload.requires_user_guide_acknowledgement);
-  const guide = $("#password-user-guide");
+  const guideAcknowledgement = $("#password-user-guide-acknowledgement");
   const acknowledgement = $("#user-guide-acknowledged");
-  guide.hidden = !requiresGuide;
+  guideAcknowledgement.hidden = !requiresGuide;
   acknowledgement.required = requiresGuide;
   acknowledgement.checked = false;
-  $("#password-screen .login-panel").classList.toggle("has-user-guide", requiresGuide);
+  const guideDialog = $("#user-guide-dialog");
+  if (guideDialog.open) guideDialog.close();
   $("#login-screen").hidden = true;
   $("#recovery-screen").hidden = true;
   $("#role-screen").hidden = true;

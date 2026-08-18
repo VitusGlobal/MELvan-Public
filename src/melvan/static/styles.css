@@ -1658,46 +1658,15 @@ select[multiple] {
   width: min(540px, 100%);
 }
 
-.login-panel.has-user-guide {
-  width: min(760px, 100%);
-}
-
-.user-guide {
-  margin: 24px 0 20px;
-  padding: 20px 0;
-  border-block: 1px solid var(--line-strong);
-  line-height: 1.5;
-}
-
-.user-guide h2 {
-  margin: 0 0 12px;
-  color: var(--ink);
-  font-size: 22px;
-}
-
-.user-guide h3 {
-  margin: 18px 0 6px;
-  color: var(--accent);
-  font-size: 16px;
-}
-
-.user-guide ul {
-  margin: 0;
-  padding-left: 22px;
-}
-
-.user-guide li + li {
-  margin-top: 5px;
-}
-
 .user-guide-acknowledgement {
   display: grid;
   grid-template-columns: 22px minmax(0, 1fr);
   align-items: start;
   gap: 10px;
-  margin-top: 20px;
+  margin-top: 18px;
   color: var(--ink);
-  font-weight: 700;
+  font-size: 14px;
+  line-height: 1.5;
 }
 
 .user-guide-acknowledgement input {
@@ -1705,6 +1674,87 @@ select[multiple] {
   height: 20px;
   margin: 2px 0 0;
   accent-color: var(--accent);
+}
+
+.user-guide-link {
+  display: inline;
+  font: inherit;
+}
+
+.user-guide-dialog {
+  width: min(680px, calc(100% - 32px));
+  max-height: calc(100dvh - 32px);
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--navigation);
+  color: var(--ink);
+  box-shadow: 0 20px 60px rgb(18 34 29 / 24%);
+}
+
+.user-guide-dialog::backdrop {
+  background: rgb(23 33 36 / 42%);
+}
+
+.user-guide-dialog-shell {
+  display: grid;
+  max-height: calc(100dvh - 32px);
+  grid-template-rows: auto minmax(0, 1fr) auto;
+}
+
+.user-guide-dialog-header,
+.user-guide-dialog-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 20px 24px;
+  background: var(--navigation);
+}
+
+.user-guide-dialog-header {
+  border-bottom: 1px solid var(--line);
+}
+
+.user-guide-dialog-header .eyebrow,
+.user-guide-dialog-header h2 {
+  margin: 0;
+}
+
+.user-guide-dialog-header h2 {
+  margin-top: 4px;
+  font-size: 24px;
+}
+
+.user-guide-dialog-content {
+  padding: 22px 24px;
+  overflow-y: auto;
+  line-height: 1.55;
+}
+
+.user-guide-dialog-content > :first-child {
+  margin-top: 0;
+}
+
+.user-guide-dialog-content h3 {
+  margin: 22px 0 8px;
+  color: var(--accent);
+  font-size: 17px;
+}
+
+.user-guide-dialog-content ul {
+  margin: 0;
+  padding-left: 22px;
+}
+
+.user-guide-dialog-content li + li {
+  margin-top: 7px;
+}
+
+.user-guide-dialog-footer {
+  justify-content: flex-end;
+  border-top: 1px solid var(--line);
 }
 
 .role-panel h1 {

@@ -10,7 +10,8 @@ PYTHONPATH=src .venv/bin/python -m unittest discover -s tests -v
 
 The suite covers domain workflows, HTTP contracts, identity, authorization,
 workspace isolation, learning, PDF export, attachment storage, migration,
-preflight checks, and version consistency.
+preflight checks, version consistency, and static contracts for both supplied
+Azure deployment profiles.
 
 ## PostgreSQL and Azurite
 
@@ -21,10 +22,11 @@ docker compose up -d postgres azurite
 docker compose --profile check run --rm postgres-check
 ```
 
-This applies the empty PostgreSQL schema and executes representative relational
-and attachment tests. Infrastructure assurance, migration rehearsal, recovery
-testing, load testing, and replica topology remain the fork operator's
-responsibility.
+This applies the empty PostgreSQL schema, creates or constrains the runtime
+database role, and executes representative relational and attachment tests.
+Infrastructure assurance, migration rehearsal against a target Azure
+environment, recovery testing, load testing, and replica-capacity validation
+remain the fork operator's responsibility.
 
 ## Browser tests
 
@@ -43,7 +45,11 @@ Backend tests alone do not close interface requirements.
 
 ## Hosted verification
 
-Use synthetic data in a separately owned Azure environment. Verify login and
+Use synthetic data in a separately owned Azure environment. For the production
+profile, first verify that the migration job succeeds before any web revision is
+deployed, at least two replicas can use the same PostgreSQL data, attachments
+survive replica replacement in Blob Storage, and the web container has no
+migration-owner credential. Then verify login and
 recovery email, managed identity, model analysis, speech, OCR, attachment
 persistence, restart behavior, authorization boundaries, health probes, custom
 domain TLS when configured, and absence of secrets or program data from logs.

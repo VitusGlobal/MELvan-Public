@@ -16,7 +16,9 @@ for required in README.md contents.md LICENSE DOCUMENTATION-LICENSE.md SECURITY.
   THIRD_PARTY_NOTICES.md ASSET-LICENSES.md docs/architecture.md \
   docs/configuration.md docs/azure-deployment.md \
   docs/testing.md docs/security-and-privacy.md docs/principles.md \
-  docs/foundational-references.md docs/health-domain-safeguards.md; do
+  docs/foundational-references.md docs/health-domain-safeguards.md \
+  infra/production-foundation.bicep infra/production-migration-job.bicep \
+  infra/production-app.bicep scripts/deploy-azure-production.sh; do
   [[ -f "$required" ]] || fail "missing $required"
 done
 

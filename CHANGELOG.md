@@ -15,6 +15,11 @@ development chronology and acceptance records are intentionally excluded.
   allowing forks to replace it through deployment configuration.
 - Added publication checks that prevent these product foundations from being
   omitted in future public candidates.
+- Clarified that persistence profiles are mutually exclusive and that the
+  production profile uses PostgreSQL without SQLite.
+- Added an opt-in Azure production deployment baseline with PostgreSQL Flexible
+  Server, private Blob attachments, a fail-closed migration job, restricted
+  runtime database credentials, and multiple stateless web replicas.
 
 ## 0.11.4 - 2026-08-18
 

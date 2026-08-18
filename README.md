@@ -23,10 +23,14 @@ accepting Evidence and correcting MELvan's classifications and mappings.
 ## Project status
 
 MELvan is pre-1.0 software. The application workflows are operational, and the
-repository includes local, hosted-demonstration, and operator-configured
-PostgreSQL/Blob storage profiles. The maintained Azure infrastructure template
-deploys the single-replica hosted-demonstration profile; it is an example
-deployment, not a prescribed or certified production topology.
+repository includes local, hosted-demonstration, and PostgreSQL/Blob production
+profiles. These are mutually exclusive: selecting the
+production profile uses PostgreSQL and Blob Storage without creating or opening
+SQLite. Separate maintained Azure templates deploy either the single-replica
+hosted demonstration or a multi-replica production baseline. The latter runs
+database migrations before web rollout and keeps privileged database credentials
+out of the web application. It is a deployment baseline, not a prescribed or
+certified production topology.
 
 Azure is the only maintained cloud platform. Other platforms may be possible,
 but they are not documented or tested by this project.

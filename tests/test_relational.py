@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import multiprocessing
+import importlib.util
 import os
 import re
 import sqlite3
@@ -9,7 +10,7 @@ import unittest
 import uuid
 from dataclasses import replace
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 from melvan.config import Settings
 from melvan.db import Database, DatabaseIntegrityError, PROGRAM_TABLES
@@ -192,6 +193,36 @@ class RelationalBoundaryTestCase(unittest.TestCase):
             self.assertIs(sentinel, build_database(settings))
         factory.assert_called_once_with(settings.database_url)
 
+    @unittest.skipUnless(
+        importlib.util.find_spec("sqlalchemy"),
+        "SQLAlchemy production dependencies are required.",
+    )
+    def test_migration_creates_a_constrained_runtime_role(self) -> None:
+        from sqlalchemy.dialects import postgresql
+
+        from melvan.schema_migrations import ensure_runtime_role
+
+        connection = MagicMock()
+        role_lookup = MagicMock()
+        role_lookup.fetchone.return_value = None
+        connection.exec_driver_sql.side_effect = [role_lookup, MagicMock()]
+        engine = MagicMock()
+        engine.dialect = postgresql.dialect()
+        engine.begin.return_value.__enter__.return_value = connection
+
+        with patch("sqlalchemy.create_engine", return_value=engine):
+            role = ensure_runtime_role(
+                "postgresql+psycopg://melvan_migrator:admin@db/melvan",
+                "postgresql+psycopg://melvan_app:runtime@db/melvan",
+            )
+
+        self.assertEqual("melvan_app", role)
+        statement = connection.exec_driver_sql.call_args_list[1].args[0]
+        self.assertIn("CREATE ROLE melvan_app WITH LOGIN", statement)
+        self.assertIn("NOSUPERUSER NOCREATEDB NOCREATEROLE", statement)
+        self.assertIn("NOREPLICATION NOBYPASSRLS", statement)
+        engine.dispose.assert_called_once_with()
+
     def test_initial_postgresql_migration_is_portable_and_workspace_owned(self) -> None:
         migration = (
             Path(__file__).resolve().parents[1]
@@ -307,6 +338,7 @@ class PostgreSQLIntegrationTestCase(unittest.TestCase):
         from melvan.schema_migrations import (
             HEAD_REVISION,
             current_revision,
+            ensure_runtime_role,
             grant_runtime_access,
             upgrade,
         )
@@ -315,6 +347,7 @@ class PostgreSQLIntegrationTestCase(unittest.TestCase):
         url = str(os.environ["MELVAN_TEST_POSTGRES_URL"])
         admin_url = str(os.environ["MELVAN_TEST_POSTGRES_ADMIN_URL"])
         upgrade(admin_url)
+        ensure_runtime_role(admin_url, url)
         grant_runtime_access(admin_url, url)
         self.assertEqual(HEAD_REVISION, current_revision(url))
 

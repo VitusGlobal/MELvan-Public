@@ -11,6 +11,68 @@ class AzureDeploymentContractTests(unittest.TestCase):
 
         self.assertIn("COPY pyproject.toml README.md alembic.ini ./", dockerfile)
         self.assertIn("COPY migrations ./migrations", dockerfile)
+        self.assertNotIn("MELVAN_DATABASE=/tmp", dockerfile)
+
+    def test_production_topology_is_postgresql_blob_and_stateless(self) -> None:
+        foundation = (ROOT / "infra/production-foundation.bicep").read_text()
+        migration = (ROOT / "infra/production-migration-job.bicep").read_text()
+        app = (ROOT / "infra/production-app.bicep").read_text()
+
+        self.assertIn("Microsoft.DBforPostgreSQL/flexibleServers", foundation)
+        self.assertIn("blobServices/containers", foundation)
+        self.assertIn("allowSharedKeyAccess: false", foundation)
+        self.assertIn("melvan-postgres-migration-url", foundation)
+        self.assertIn("melvan-postgres-runtime-url", foundation)
+        self.assertIn("migrationIdentityName = '${appName}-migration'", foundation)
+        self.assertIn("scope: migrationDatabaseSecret", foundation)
+        self.assertNotIn("scope: keyVault\n  name: guid(keyVault.id, runtimeIdentity.id", foundation)
+        self.assertIn("Storage Blob Data Contributor", (ROOT / "docs/azure-deployment.md").read_text())
+        self.assertNotIn("fileServices/shares", foundation)
+        self.assertNotIn("managedEnvironments/storages", foundation)
+
+        self.assertIn("Microsoft.App/jobs", migration)
+        self.assertIn("melvan.migrate', 'upgrade", migration)
+        self.assertIn("MELVAN_MIGRATION_DATABASE_URL", migration)
+        self.assertIn("MELVAN_DATABASE_URL", migration)
+        self.assertIn("identityName string = '${appName}-migration'", migration)
+
+        self.assertIn("MELVAN_DEPLOYMENT_PROFILE', value: 'production", app)
+        self.assertIn("MELVAN_ATTACHMENT_BACKEND', value: 'azure_blob", app)
+        self.assertIn("MELVAN_BLOB_ACCOUNT_URL", app)
+        self.assertIn("minReplicas: minReplicas", app)
+        self.assertNotIn("MELVAN_DATABASE',", app)
+        self.assertNotIn("MELVAN_PERSISTENT_DATABASE", app)
+        self.assertNotIn("AzureFile", app)
+        self.assertNotIn("volumeMounts", app)
+
+    def test_production_deployment_migrates_before_web_rollout(self) -> None:
+        script = (ROOT / "scripts/deploy-azure-production.sh").read_text()
+        workflow = (ROOT / ".github/workflows/deploy-azure.yml").read_text()
+
+        self.assertIn("deployment_profile:", workflow)
+        self.assertIn("- production", workflow)
+        self.assertIn("./scripts/deploy-azure-production.sh", workflow)
+        self.assertIn("MELVAN_POSTGRES_SKU", workflow)
+        self.assertLess(
+            script.index("production-foundation.bicep"),
+            script.index("production-migration-job.bicep"),
+        )
+        self.assertLess(
+            script.index("containerapp job start"),
+            script.index("production-app.bicep"),
+        )
+        self.assertIn("The web application was not deployed", script)
+        self.assertIn("MELVAN_MIN_REPLICAS >= 2", script)
+
+    def test_migration_provisions_restricted_runtime_role(self) -> None:
+        command = (ROOT / "src/melvan/migrate.py").read_text()
+        migrations = (ROOT / "src/melvan/schema_migrations.py").read_text()
+
+        self.assertIn("ensure_runtime_role(migration_url, settings.database_url)", command)
+        self.assertIn("CREATE ROLE", migrations)
+        self.assertIn("ALTER ROLE", migrations)
+        self.assertIn("NOSUPERUSER", migrations)
+        self.assertIn("NOBYPASSRLS", migrations)
 
     def test_fork_operator_guides_define_the_support_boundary(self) -> None:
         guide = ROOT / "docs/azure-deployment.md"
@@ -21,11 +83,13 @@ class AzureDeploymentContractTests(unittest.TestCase):
             "not a prescribed or certified production topology",
             " ".join(content.split()),
         )
-        self.assertIn("Fork operators are responsible", content)
+        self.assertIn("Fork operators remain responsible", content)
         self.assertIn(
             "They do not cover ongoing operations",
             " ".join(content.split()),
         )
+        self.assertIn("PostgreSQL-only deployment", content)
+        self.assertIn("production deployment workflow", content)
 
         architecture = (ROOT / "docs/architecture.md").read_text()
         self.assertIn("MELvan maintainers are responsible", architecture)

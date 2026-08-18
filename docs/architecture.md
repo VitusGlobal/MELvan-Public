@@ -67,12 +67,15 @@ remove the PMF from MELvan's architecture or principles.
 | --- | --- | --- | --- |
 | `local` | SQLite | Local directory | Development and evaluation |
 | `hosted_demo` | Local SQLite plus durable snapshot | Azure Files-compatible directory | Existing single-replica demonstration |
-| `production` | PostgreSQL | Private Azure Blob Storage | Operator-configured deployment |
+| `production` | PostgreSQL | Private Azure Blob Storage | Multi-replica Azure deployment baseline |
 
-The adapters, migrations, and initial PostgreSQL schema exist. The maintained
-Azure template deploys `hosted_demo`. Fork operators may configure the
-`production` profile within infrastructure designed and validated for their own
-requirements.
+Separate maintained Azure templates preserve a simple `hosted_demo` path and an
+opt-in `production` path. The production foundation provisions PostgreSQL and
+Blob Storage; a one-off migration job uses a dedicated managed identity to read
+the migration-owner credential, applies schema changes, and provisions the
+restricted runtime role before the stateless web replicas are deployed. The web
+identity cannot read the migration-owner secret, and the application has no
+SQLite or Azure Files volume.
 
 ## Model boundary
 
@@ -88,10 +91,11 @@ and are authorized through their relational Statement records.
 
 ## Reliability
 
-The production relational design uses explicit migrations, a separate migration
-role, transaction-scoped workspace context, advisory migration locking, bounded
-replay-safe retries, and readiness checks. Attachment migration is resumable and
-source-preserving, with size and SHA-256 reconciliation before completion.
+The production relational design uses explicit migrations, separate migration
+and runtime roles, transaction-scoped workspace context, advisory migration
+locking, bounded replay-safe retries, and readiness checks. Attachment migration
+is resumable and source-preserving, with size and SHA-256 reconciliation before
+completion.
 
 ## Deployment responsibility
 

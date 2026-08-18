@@ -2,13 +2,22 @@ name: Deploy to Azure
 
 on:
   workflow_dispatch:
+    inputs:
+      deployment_profile:
+        description: Persistence and replica topology to deploy
+        required: true
+        default: hosted_demo
+        type: choice
+        options:
+          - hosted_demo
+          - production
 
 permissions:
   contents: read
   id-token: write
 
 concurrency:
-  group: ${{ github.repository }}-${{ vars.MELVAN_DEPLOYMENT_ENVIRONMENT }}
+  group: ${{ github.repository }}-${{ vars.MELVAN_DEPLOYMENT_ENVIRONMENT }}-${{ inputs.deployment_profile }}
   cancel-in-progress: false
 
 jobs:
@@ -49,6 +58,7 @@ jobs:
           tenant-id: ${{ vars.AZURE_TENANT_ID }}
           subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
       - name: Deploy hosted demonstration
+        if: ${{ inputs.deployment_profile == 'hosted_demo' }}
         env:
           MELVAN_RESOURCE_GROUP: ${{ vars.MELVAN_RESOURCE_GROUP }}
           MELVAN_LOCATION: ${{ vars.MELVAN_LOCATION }}
@@ -64,3 +74,26 @@ jobs:
           MELVAN_CUSTOM_DOMAIN: ${{ vars.MELVAN_CUSTOM_DOMAIN }}
           MELVAN_INITIAL_ADMIN_EMAIL: ${{ vars.MELVAN_INITIAL_ADMIN_EMAIL }}
         run: ./scripts/deploy-azure.sh
+      - name: Deploy PostgreSQL production profile
+        if: ${{ inputs.deployment_profile == 'production' }}
+        env:
+          MELVAN_RESOURCE_GROUP: ${{ vars.MELVAN_RESOURCE_GROUP }}
+          MELVAN_LOCATION: ${{ vars.MELVAN_LOCATION }}
+          MELVAN_APP_NAME: ${{ vars.MELVAN_APP_NAME }}
+          MELVAN_FOUNDRY_RESOURCE_GROUP: ${{ vars.MELVAN_FOUNDRY_RESOURCE_GROUP }}
+          MELVAN_FOUNDRY_ACCOUNT: ${{ vars.MELVAN_FOUNDRY_ACCOUNT }}
+          MELVAN_FOUNDRY_PROJECT_ENDPOINT: ${{ vars.MELVAN_FOUNDRY_PROJECT_ENDPOINT }}
+          MELVAN_MODEL: ${{ vars.MELVAN_MODEL }}
+          MELVAN_COMMUNICATION_RESOURCE_GROUP: ${{ vars.MELVAN_COMMUNICATION_RESOURCE_GROUP }}
+          MELVAN_COMMUNICATION_RESOURCE: ${{ vars.MELVAN_COMMUNICATION_RESOURCE }}
+          MELVAN_EMAIL_ENDPOINT: ${{ vars.MELVAN_EMAIL_ENDPOINT }}
+          MELVAN_EMAIL_SENDER: ${{ vars.MELVAN_EMAIL_SENDER }}
+          MELVAN_CUSTOM_DOMAIN: ${{ vars.MELVAN_CUSTOM_DOMAIN }}
+          MELVAN_INITIAL_ADMIN_EMAIL: ${{ vars.MELVAN_INITIAL_ADMIN_EMAIL }}
+          MELVAN_POSTGRES_SKU: ${{ vars.MELVAN_POSTGRES_SKU }}
+          MELVAN_POSTGRES_TIER: ${{ vars.MELVAN_POSTGRES_TIER }}
+          MELVAN_POSTGRES_VERSION: ${{ vars.MELVAN_POSTGRES_VERSION }}
+          MELVAN_POSTGRES_STORAGE_GB: ${{ vars.MELVAN_POSTGRES_STORAGE_GB }}
+          MELVAN_MIN_REPLICAS: ${{ vars.MELVAN_MIN_REPLICAS }}
+          MELVAN_MAX_REPLICAS: ${{ vars.MELVAN_MAX_REPLICAS }}
+        run: ./scripts/deploy-azure-production.sh

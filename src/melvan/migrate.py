@@ -6,7 +6,12 @@ import argparse
 import os
 
 from .config import Settings
-from .schema_migrations import current_revision, grant_runtime_access, upgrade
+from .schema_migrations import (
+    current_revision,
+    ensure_runtime_role,
+    grant_runtime_access,
+    upgrade,
+)
 
 
 def parser() -> argparse.ArgumentParser:
@@ -33,6 +38,7 @@ def main(argv: list[str] | None = None) -> int:
             "The application runtime role must not own or migrate its schema."
         )
     upgrade(migration_url, args.revision)
+    ensure_runtime_role(migration_url, settings.database_url)
     role = grant_runtime_access(migration_url, settings.database_url)
     print(f"MELvan schema upgraded to {args.revision}.")
     print(f"Runtime database access granted to {role}.")

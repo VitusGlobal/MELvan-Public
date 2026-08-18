@@ -43,17 +43,47 @@ not be mistaken for a quality assessment of a live model.
 
 ## Persistence
 
-| Variable | Purpose |
-| --- | --- |
-| `MELVAN_DATABASE` | Local SQLite file |
-| `MELVAN_PERSISTENT_DATABASE` | Hosted-demo durable SQLite snapshot |
-| `MELVAN_DATABASE_URL` | Production PostgreSQL application URL |
-| `MELVAN_MIGRATION_DATABASE_URL` | PostgreSQL migration-owner URL |
-| `MELVAN_ATTACHMENT_BACKEND` | `local` or `azure_blob` |
-| `MELVAN_ATTACHMENT_ROOT` | Local attachment directory |
-| `MELVAN_BLOB_ACCOUNT_URL` | Managed-identity Blob account URL |
-| `MELVAN_BLOB_CONTAINER` | Private attachment container |
-| `MELVAN_BLOB_CONNECTION_STRING` | Emulator-only connection string |
+Persistence profiles are mutually exclusive. An installation selects exactly
+one profile; MELvan does not run SQLite alongside PostgreSQL.
+
+| Profile | Relational store | Attachment store | Active variables |
+| --- | --- | --- | --- |
+| `local` | One SQLite file | Local directory | `MELVAN_DATABASE`, `MELVAN_ATTACHMENT_BACKEND=local`, `MELVAN_ATTACHMENT_ROOT` |
+| `hosted_demo` | Runtime SQLite file plus durable SQLite snapshot | Azure Files-compatible local directory | `MELVAN_DATABASE`, `MELVAN_PERSISTENT_DATABASE`, `MELVAN_ATTACHMENT_BACKEND=local`, `MELVAN_ATTACHMENT_ROOT` |
+| `production` | PostgreSQL only | Private Azure Blob Storage | `MELVAN_DATABASE_URL`, `MELVAN_MIGRATION_DATABASE_URL`, `MELVAN_ATTACHMENT_BACKEND=azure_blob`, `MELVAN_BLOB_ACCOUNT_URL`, `MELVAN_BLOB_CONTAINER` |
+
+In the `production` profile, MELvan constructs the PostgreSQL adapter and does
+not create or open a SQLite database. `MELVAN_DATABASE` and
+`MELVAN_ATTACHMENT_ROOT` are not used, and `MELVAN_PERSISTENT_DATABASE` is
+rejected. `MELVAN_BLOB_CONNECTION_STRING` is reserved for local Azurite testing;
+hosted Azure deployments should use managed identity and
+`MELVAN_BLOB_ACCOUNT_URL`.
+
+### PostgreSQL-only configuration
+
+An installation that wants only the production-ready persistence path uses:
+
+```text
+MELVAN_ENVIRONMENT=hosted
+MELVAN_DEPLOYMENT_PROFILE=production
+MELVAN_DATABASE_URL=postgresql+psycopg://melvan_app:...@postgres:5432/melvan
+MELVAN_MIGRATION_DATABASE_URL=postgresql+psycopg://melvan_migrator:...@postgres:5432/melvan
+MELVAN_ATTACHMENT_BACKEND=azure_blob
+MELVAN_BLOB_ACCOUNT_URL=https://your-storage-account.blob.core.windows.net
+MELVAN_BLOB_CONTAINER=melvan-attachments
+```
+
+The migration URL belongs in the trusted migration environment, not the
+ordinary application runtime. Run the database migrations before starting or
+upgrading application replicas. The hosted authentication, provider, email,
+speech, OCR, and Owner variables remain required independently of the selected
+persistence profile.
+
+The supplied production Azure deployment provisions PostgreSQL and Blob
+Storage, runs migrations before web rollout, and injects only the runtime
+database URL into the application. Operators can also supply equivalent
+infrastructure while preserving those credential and migration boundaries. See
+[Azure Deployment](azure-deployment.md#postgresql-only-deployment).
 
 ## Azure deployment variables
 
@@ -79,6 +109,12 @@ original project's account or resource names.
 | `MELVAN_EMAIL_SENDER` | Yes | Verified sender |
 | `MELVAN_INITIAL_ADMIN_EMAIL` | Yes | Initial Owner email |
 | `MELVAN_CUSTOM_DOMAIN` | No | Existing verified custom hostname |
+| `MELVAN_POSTGRES_SKU` | No | Production PostgreSQL SKU; defaults to `Standard_B1ms` |
+| `MELVAN_POSTGRES_TIER` | No | Production PostgreSQL tier; defaults to `Burstable` |
+| `MELVAN_POSTGRES_VERSION` | No | Production PostgreSQL major version; defaults to `16` |
+| `MELVAN_POSTGRES_STORAGE_GB` | No | Production PostgreSQL storage in GB; defaults to `32` |
+| `MELVAN_MIN_REPLICAS` | No | Production minimum web replicas; defaults to `2` and cannot be lower |
+| `MELVAN_MAX_REPLICAS` | No | Production maximum web replicas; defaults to `4` |
 
 Run the deployment preflight before provisioning:
 

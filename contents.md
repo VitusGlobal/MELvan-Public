@@ -49,6 +49,9 @@ attachments, and local configuration are intentionally excluded.
 
 - [`infra/app.bicep`](infra/app.bicep) - Defines the Azure Container App, runtime configuration, identity, ingress, and storage mount.
 - [`infra/foundation.bicep`](infra/foundation.bicep) - Defines the shared Azure resources used by the supplied deployment profile.
+- [`infra/production-app.bicep`](infra/production-app.bicep) - Defines the stateless, multi-replica production Container App with restricted PostgreSQL and Blob access.
+- [`infra/production-foundation.bicep`](infra/production-foundation.bicep) - Defines the PostgreSQL, Blob, identity, registry, Key Vault, and provider resources for the production profile.
+- [`infra/production-migration-job.bicep`](infra/production-migration-job.bicep) - Defines the fail-closed Container Apps Job that applies schema migrations before web rollout.
 
 ## `migrations/`
 
@@ -67,6 +70,7 @@ attachments, and local configuration are intentionally excluded.
 - [`scripts/check-publication.sh`](scripts/check-publication.sh) - Blocks publication when required files, licensing, privacy, or documentation checks fail.
 - [`scripts/check_docs.py`](scripts/check_docs.py) - Validates local links in Markdown documentation.
 - [`scripts/deploy-azure.sh`](scripts/deploy-azure.sh) - Validates fork configuration and deploys the supplied Azure profile.
+- [`scripts/deploy-azure-production.sh`](scripts/deploy-azure-production.sh) - Provisions and verifies the PostgreSQL/Blob production deployment in migration-first order.
 - [`scripts/generate-postgres-initial.py`](scripts/generate-postgres-initial.py) - Regenerates the baseline PostgreSQL SQL from the migration source.
 - [`scripts/start.sh`](scripts/start.sh) - Creates or reuses a stable local Python environment and starts MELvan.
 

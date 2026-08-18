@@ -30,6 +30,54 @@ def upgrade(database_url: str, revision: str = "head") -> None:
     command.upgrade(_config(database_url), revision)
 
 
+def ensure_runtime_role(admin_url: str, runtime_url: str) -> str:
+    """Create or rotate the constrained PostgreSQL application login."""
+
+    try:
+        from sqlalchemy import String, create_engine
+        from sqlalchemy.engine import make_url
+    except ImportError as exc:
+        raise RuntimeError(
+            "Runtime database provisioning requires the 'production' dependency group."
+        ) from exc
+    runtime = make_url(runtime_url)
+    admin = make_url(admin_url)
+    role = str(runtime.username or "")
+    admin_role = str(admin.username or "")
+    password = str(runtime.password or "")
+    if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]{0,62}", role):
+        raise ValueError("MELVAN_DATABASE_URL must contain a valid runtime role.")
+    if role == admin_role:
+        raise ValueError(
+            "The PostgreSQL runtime role must be different from the migration role."
+        )
+    if not password:
+        raise ValueError("MELVAN_DATABASE_URL must contain a runtime-role password.")
+    engine = create_engine(admin_url, pool_pre_ping=True)
+    quoted_role = engine.dialect.identifier_preparer.quote(role)
+    literal_password = String().literal_processor(engine.dialect)(password)
+    if not literal_password:
+        raise ValueError("The PostgreSQL runtime-role password is invalid.")
+    try:
+        with engine.begin() as connection:
+            exists = connection.exec_driver_sql(
+                "SELECT 1 FROM pg_roles WHERE rolname = %s", (role,)
+            ).fetchone()
+            if exists is None:
+                connection.exec_driver_sql(
+                    f"CREATE ROLE {quoted_role} WITH LOGIN PASSWORD {literal_password} "
+                    "NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS"
+                )
+            else:
+                connection.exec_driver_sql(
+                    f"ALTER ROLE {quoted_role} WITH LOGIN PASSWORD {literal_password} "
+                    "NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS"
+                )
+    finally:
+        engine.dispose()
+    return role
+
+
 def grant_runtime_access(admin_url: str, runtime_url: str) -> str:
     """Grant the non-owner application role only its required schema access."""
 

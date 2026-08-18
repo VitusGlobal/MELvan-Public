@@ -1,4 +1,4 @@
-"""WSGI entry point for the single-replica hosted MELvan deployment."""
+"""WSGI entry point for hosted MELvan deployments."""
 
 from __future__ import annotations
 

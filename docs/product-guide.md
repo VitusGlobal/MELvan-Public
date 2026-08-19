@@ -51,6 +51,8 @@ A Logic Model contains:
 - Short-, Medium-, and Long-term Outcomes.
 - Exactly one Ultimate Goal.
 
+Newly created administrator accounts can configure the logic model for their workspace - they have the choice to either clone the 'demo' model, a generic logic model for an imaginary mental health program for adults, or they can create their own logic model which must comply with the defined structure above.
+
 Administrators edit an autosaved draft and explicitly commit it to create a new
 immutable version. Earlier versions can be selected and restored without
 erasing history. Changes to a title or RECAP field do not affect mappings.
@@ -82,8 +84,73 @@ compared over time.
 
 ## Learning
 
-Accepted and corrected review decisions become bounded, versioned precedents.
-MELvan preserves its original proposal separately from Reviewer-confirmed truth.
-Learning prioritizes missing mappings and surprising high-confidence errors over
-routine confirmation. It does not fine-tune model weights or allow raw comments
-to rewrite global instructions.
+Every completed review produces a **How MELvan did** report. It records the
+number of Statements reviewed, accepted, sent back with changes, and marked Not
+relevant. It then reports a numerator, denominator, and percentage for both the
+completed review session and MELvan's lifetime performance in that workspace.
+Completed session snapshots are immutable, allowing performance to be compared
+chronologically as MELvan learns. Records marked Not relevant are retained for
+audit but excluded from the performance metrics.
+
+MELvan is assessed against five quality measures:
+
+- **First-review approval:** whether the Reviewer's first action accepts the
+  Statement and MELvan's associated decisions without a substantive correction.
+  This is the primary outcome MELvan is intended to improve.
+- **Correct level:** whether MELvan correctly distinguishes Activity, Output,
+  Outcome, and Indicator.
+- **Correct Outcome direction:** whether an Outcome is correctly identified as
+  Positive or Negative. This measure is not applicable to Activities, Outputs,
+  or Indicators and they are excluded from its denominator.
+- **Correct mapping:** whether MELvan identifies the correct existing Logic
+  Model element or elements, or correctly determines that there is no suitable
+  existing match. An undisputed mapping or no-match decision scores as correct.
+- **No hallucination/toxic content:** whether the summary, rationale, criteria,
+  terminology, tone, and other language are accurate, supported, appropriate,
+  and free from invented details or overstated claims.
+
+Rejecting only a mapping that MELvan clearly labelled **Low confidence** does
+not reduce first-review approval or mapping correctness. Accepting that mapping
+confirms it as correct. Evidence reassessed after a Logic Model update creates
+another scoring event under the same measures rather than being excluded from
+MELvan's overall performance.
+
+The report also records diagnostic learning signals that are not additional
+quality scores: mappings MELvan omitted but the Reviewer added; mappings MELvan
+proposed but the Reviewer rejected; high-confidence errors, meaning a corrected
+or rejected decision originally made with at least 80% confidence; and the
+number of tentative mappings presented, accepted, and rejected. These signals
+help distinguish important gaps from reasonable low-confidence hypotheses.
+
+Each accepted or corrected decision creates append-only, versioned learning
+examples for the relevant dimensions:
+
+- **Classification examples** compare MELvan's proposed RBM level with the
+  Reviewer-confirmed level.
+- **Direction examples** compare the proposed and confirmed Positive or
+  Negative direction for Outcomes.
+- **Mapping examples** record each mapping as confirmed, unsupported, or
+  omitted. One-to-many decisions are retained element by element.
+- **Language examples** record confirmation or structured feedback about an
+  inaccurate summary, unsupported or invented detail, overstated causal claim,
+  inappropriate terminology or tone, unclear or unnecessarily technical
+  language, or another specified language issue. Free-text comments provide
+  preferred wording or necessary detail; they do not directly rewrite MELvan's
+  global instructions.
+
+MELvan preserves its original proposal and confidence separately from the
+Reviewer-confirmed truth. Confirmed truth has full authority for the reviewed
+record, but the original confidence remains available to calculate learning
+priority. Missing mappings receive the greatest attention. A confidently wrong
+decision carries more learning value than a low-confidence error, while a
+correct decision near the confidence boundary is more informative than routine
+high-confidence confirmation. The objective is better first-review agreement,
+not simply increasing confidence scores.
+
+For a new Statement, MELvan retrieves a bounded set of eligible, workspace-
+specific precedents using both similarity to the new Statement and learning
+priority. Mapping examples must still refer to elements in the current Logic
+Model. The analysis records the learning-policy version and the exact examples
+used, making their influence auditable. Administrators can disable or roll back
+a learning policy and exclude an unsuitable example without deleting its audit
+history. MELvan does not fine-tune model weights through this process.

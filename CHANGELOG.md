@@ -3,6 +3,14 @@
 This changelog begins with the first reviewed public-release candidate. Private
 development chronology and acceptance records are intentionally excluded.
 
+## 1.0.0 - 2026-08-19
+
+- Marked MELvan's first stable product milestone following acceptance of the
+  first-time registration journey and required User Guide acknowledgement.
+- Established the current role-aware reporting, review, evidence, logic-model,
+  learning, media-capture, administration, and owner capabilities as the 1.0
+  functional baseline.
+
 ## 0.11.6 - 2026-08-18
 
 - Completed the first-time password setup journey with a required User Guide

@@ -54,13 +54,14 @@ class FrontendContractTestCase(unittest.TestCase):
             self.assertIn(behavior, JAVASCRIPT)
         self.assertIn("@keyframes head-no", CSS)
         self.assertIn('id="logout"', HTML)
-        for view in ("report", "my-statements", "review", "evidence", "logic-model", "users"):
+        for view in ("report", "my-statements", "review", "evidence", "logic-model", "users", "melvan-metrics"):
             self.assertIn(f'data-view="{view}"', HTML)
             self.assertIn(f'id="view-{view}"', HTML)
         self.assertIn('data-role="reporter"', HTML)
         self.assertIn('data-role="reviewer"', HTML)
         self.assertIn('data-role="administrator"', HTML)
         self.assertIn("function allowedViews()", JAVASCRIPT)
+        self.assertIn("function canViewAdministratorMetrics()", JAVASCRIPT)
         self.assertEqual(5, HTML.count('src="/assets/melvan-logo.png"'))
         self.assertEqual(5, HTML.count("Capture results on the go using AI"))
         self.assertNotIn("Capture results on the go</small>", HTML)
@@ -245,6 +246,23 @@ class FrontendContractTestCase(unittest.TestCase):
         ):
             self.assertIn(label, HTML + JAVASCRIPT)
         self.assertIn("Are you sure? None of your changes will be implemented or saved", HTML)
+
+    def test_administrator_has_workspace_lifetime_metrics_view(self) -> None:
+        self.assertIn('data-view="melvan-metrics"', HTML)
+        self.assertIn('data-role="administrator-metrics"', HTML)
+        self.assertIn('id="view-melvan-metrics"', HTML)
+        self.assertIn('id="administrator-metrics"', HTML)
+        self.assertIn("Overall performance for this workspace", HTML)
+        for label in (
+            "First-review approval",
+            "Correct level",
+            "Correct direction",
+            "Correct mapping",
+            "No hallucination/toxic content",
+        ):
+            self.assertIn(label, JAVASCRIPT)
+        self.assertIn("MELvan performance metrics will appear after the first scored review.", JAVASCRIPT)
+        self.assertIn('/api/admin/metrics', JAVASCRIPT)
 
     def test_logic_model_builder_uses_section_specific_order_and_controls(self) -> None:
         self.assertIn('const levelOrder = ["ultimate_goal", "long_term_outcome", "medium_term_outcome", "short_term_outcome", "output"]', JAVASCRIPT)

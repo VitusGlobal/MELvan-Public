@@ -943,19 +943,6 @@ class MelvanService:
         accepted_at: str,
     ) -> str:
         evidence_id = self._new_id("evidence")
-        proposal = current.get("proposed_element")
-        if proposal and proposal["source"] == "model" and proposal["status"] == "provisional":
-            connection.execute(
-                "UPDATE elements SET status = 'approved' WHERE id = ?",
-                (proposal["id"],),
-            )
-            self._audit(
-                connection,
-                "provisional_element_approved",
-                "element",
-                proposal["id"],
-                {"statement_id": statement_id},
-            )
         try:
             connection.execute(
                 """
@@ -3372,6 +3359,29 @@ class MelvanService:
             "percentage": round(matches / total * 100, 1) if total else None,
         }
 
+    def workspace_metrics(self) -> dict[str, Any]:
+        """Return the established lifetime review measures for the active workspace."""
+        with self.database.connection() as connection:
+            rows = connection.execute(
+                """
+                SELECT * FROM scoring_events
+                WHERE workspace_id = melvan_workspace_id()
+                ORDER BY created_at, id
+                """
+            ).fetchall()
+            completed_sessions = connection.execute(
+                """
+                SELECT COUNT(*) FROM review_sessions
+                WHERE workspace_id = melvan_workspace_id() AND status = 'completed'
+                """
+            ).fetchone()[0]
+        return {
+            "scoring_policy_version": SCORING_POLICY_VERSION,
+            "scored_reviews": len(rows),
+            "completed_review_sessions": int(completed_sessions),
+            "lifetime_scores": self._score_summary(rows),
+        }
+
     def list_users(
         self,
         *,
@@ -4168,8 +4178,7 @@ class MelvanService:
                 """
                 SELECT * FROM elements
                 WHERE workspace_id = melvan_workspace_id()
-                  AND ((logic_model_id = ? AND status = 'published')
-                   OR (logic_model_id IS NULL AND status = 'approved'))
+                  AND logic_model_id = ? AND status = 'published'
                 ORDER BY CASE element_type WHEN 'Output' THEN 0 ELSE 1 END, display_id
                 """,
                 (logic_model_id,),
@@ -4191,8 +4200,7 @@ class MelvanService:
                 SELECT id FROM elements
                 WHERE id IN ({placeholders})
                   AND workspace_id = melvan_workspace_id()
-                  AND ((logic_model_id = ? AND status = 'published')
-                       OR (logic_model_id IS NULL AND status = 'approved'))
+                  AND logic_model_id = ? AND status = 'published'
                 """,
                 [*mapping_ids, current["id"]],
             ).fetchall()
@@ -4272,33 +4280,6 @@ class MelvanService:
         analysis_id = self._new_id("analysis")
         proposal_id = None
         mapping_ids = list(result.match_ids)
-        if result.proposed_element:
-            proposal_id = self._new_id("WP")
-            proposal = result.proposed_element
-            connection.execute(
-                """
-                INSERT INTO elements
-                    (id, display_id, logic_model_id, label, element_type, level, group_name,
-                     source, status, created_at)
-                VALUES (?, ?, NULL, ?, ?, ?, 'MELvan proposal', 'model', 'provisional', ?)
-                """,
-                (
-                    proposal_id,
-                    proposal_id,
-                    proposal.label,
-                    proposal.element_type,
-                    "working_outcome",
-                    utc_now(),
-                ),
-            )
-            mapping_ids = [proposal_id]
-            self._audit(
-                connection,
-                "provisional_element_created",
-                "element",
-                proposal_id,
-                {"reason": proposal.reason, "statement_id": statement_id},
-            )
 
         if logic_model_id:
             logic_row = connection.execute(
@@ -4393,7 +4374,7 @@ class MelvanService:
         tentative.sort(key=lambda decision: decision.confidence, reverse=True)
         tentative = tentative[:MAX_TENTATIVE_MAPPINGS]
         qualifying = supported + tentative
-        if qualifying == result.mapping_decisions:
+        if qualifying == result.mapping_decisions and result.proposed_element is None:
             return result
         if qualifying:
             return replace(
@@ -4409,7 +4390,8 @@ class MelvanService:
             mapping_decisions=[],
             proposed_element=None,
             no_match_rationale=(
-                "No existing Logic Model mapping reached the required 25% display threshold."
+                result.no_match_rationale
+                or "No existing Logic Model mapping reached the required 25% display threshold."
             ),
         )
 
@@ -4491,7 +4473,9 @@ class MelvanService:
                     """
                     SELECT e.*, am.rank, am.confidence, am.rationale FROM analysis_mappings am
                     JOIN elements e ON e.id = am.element_id
-                    WHERE am.analysis_id = ? ORDER BY am.rank
+                    WHERE am.analysis_id = ?
+                      AND e.logic_model_id IS NOT NULL
+                    ORDER BY am.rank
                     """,
                     (analysis["id"],),
                 ).fetchall()
@@ -4508,11 +4492,6 @@ class MelvanService:
                         for mapping in mappings
                         if self._mapping_confidence_qualifies(mapping.get("confidence"))
                     ]
-                if analysis["proposed_element_id"]:
-                    proposal_row = connection.execute(
-                        "SELECT * FROM elements WHERE id = ?", (analysis["proposed_element_id"],)
-                    ).fetchone()
-                    proposed_element = dict(proposal_row) if proposal_row else None
         statement["analysis"] = analysis
         statement["mappings"] = mappings
         statement["proposed_element"] = proposed_element
@@ -4869,8 +4848,7 @@ class MelvanService:
             """
             SELECT * FROM elements
             WHERE workspace_id = melvan_workspace_id()
-              AND ((logic_model_id = ? AND status = 'published')
-               OR (logic_model_id IS NULL AND status = 'approved'))
+              AND logic_model_id = ? AND status = 'published'
             ORDER BY CASE element_type WHEN 'Output' THEN 0 ELSE 1 END,
                      CASE level
                         WHEN 'output' THEN 0 WHEN 'enabling_output' THEN 1

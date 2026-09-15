@@ -17,6 +17,7 @@ const state = {
   quality: { matches: 0, total: 0, percentage: null },
   reviewSession: null,
   reviewReport: null,
+  administratorMetrics: null,
   model: null,
   appVersion: null,
   workspaces: [],
@@ -398,6 +399,10 @@ function canViewUsers() {
   return canAdminister() || state.workspaceReadOnly;
 }
 
+function canViewAdministratorMetrics() {
+  return !state.workspaceReadOnly && roles().has("administrator");
+}
+
 function canViewReviewWorkspace() {
   return roles().has("reviewer") || state.workspaceReadOnly;
 }
@@ -421,6 +426,7 @@ function allowedViews() {
     values.add("evidence");
   }
   if (canViewUsers()) values.add("users");
+  if (canViewAdministratorMetrics()) values.add("melvan-metrics");
   return values;
 }
 
@@ -437,6 +443,8 @@ function configureAccess() {
     const required = tab.dataset.role;
     const permitted = required === "administrator"
       ? canViewUsers()
+      : required === "administrator-metrics"
+        ? canViewAdministratorMetrics()
       : required === "reviewer"
         ? canViewReviewWorkspace()
         : roles().has(required);
@@ -479,6 +487,7 @@ function setView(view, updateHash = true) {
   });
   if (updateHash) history.replaceState(null, "", `#${view}`);
   if (["review", "evidence", "users"].includes(view)) refreshData();
+  if (view === "melvan-metrics") refreshAdministratorMetrics();
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
@@ -500,6 +509,7 @@ async function refreshData() {
     state.quality = payload.quality;
     state.reviewSession = payload.review_session || null;
     state.reviewReport = payload.review_report || null;
+    if (!canViewAdministratorMetrics()) state.administratorMetrics = null;
     state.model = payload.model;
     state.appVersion = payload.app_version || null;
     state.activeRole = payload.active_role || state.activeRole;
@@ -519,6 +529,20 @@ async function refreshData() {
     if (state.activeView === "evidence") renderLoadFailure("#evidence-list", error.message);
     if (state.activeView === "logic-model") renderLoadFailure("#logic-model-view", error.message);
   }
+}
+
+async function refreshAdministratorMetrics() {
+  if (!canViewAdministratorMetrics()) return;
+  const root = $("#administrator-metrics");
+  root.innerHTML = `<p class="loading-state">Loading metrics...</p>`;
+  try {
+    const payload = await api("/api/admin/metrics");
+    state.administratorMetrics = payload.metrics || null;
+    renderAdministratorMetrics();
+  } catch (error) {
+    root.innerHTML = emptyState("circle-alert", error.message);
+  }
+  refreshIcons();
 }
 
 function renderWorkspaceSelector() {
@@ -562,6 +586,7 @@ function renderAll() {
   renderLogicModelEditor();
   renderLogicVersions();
   renderUsers();
+  renderAdministratorMetrics();
   renderQuality();
   refreshIcons();
   loadStatementPhotos();
@@ -1345,6 +1370,21 @@ function renderReviewFilters() {
   mappingSelect.value = mappings.has(currentMapping) ? currentMapping : "";
 }
 
+const SCORE_LABELS = {
+  first_review_approval: "First-review approval",
+  correct_level: "Correct level",
+  correct_direction: "Correct direction",
+  correct_mapping: "Correct mapping",
+  overall_hygiene: "No hallucination/toxic content",
+};
+
+function scoreGrid(scores) {
+  return Object.entries(SCORE_LABELS).map(([key, label]) => {
+    const score = scores?.[key] || { matches: 0, total: 0, percentage: null };
+    return `<div class="score-cell"><span>${label}</span><strong>${score.percentage == null ? "—" : `${score.percentage}%`}</strong><small>${score.matches} of ${score.total}</small></div>`;
+  }).join("");
+}
+
 function renderReviewReport() {
   const root = $("#review-report");
   const report = state.reviewReport;
@@ -1353,33 +1393,22 @@ function renderReviewReport() {
     root.innerHTML = "";
     return;
   }
-  const scoreLabels = {
-    first_review_approval: "First-review approval",
-    correct_level: "Correct level",
-    correct_direction: "Correct direction",
-    correct_mapping: "Correct mapping",
-    overall_hygiene: "No hallucination/toxic content",
-  };
-  const scoreGrid = (scores) => Object.entries(scoreLabels).map(([key, label]) => {
-    const score = scores[key] || { matches: 0, total: 0, percentage: null };
-    return `<div class="score-cell"><span>${label}</span><strong>${score.percentage == null ? "—" : `${score.percentage}%`}</strong><small>${score.matches} of ${score.total}</small></div>`;
-  }).join("");
   const trend = report.session_trend || [];
   const recent = trend.slice(-3);
-  const trendStatus = Object.entries(scoreLabels).map(([key, label]) => {
+  const trendStatus = Object.entries(SCORE_LABELS).map(([key, label]) => {
     const total = recent.reduce((sum, session) => sum + (session.scores[key]?.total || 0), 0);
     return `<div class="trend-status"><span>${label}</span><strong>${total >= 20 ? "Trend available" : "Insufficient sample"}</strong><small>${total} eligible events in the latest ${recent.length} session${recent.length === 1 ? "" : "s"}</small></div>`;
   }).join("");
   const trendRows = trend.map((session, index) => `<tr>
     <th scope="row">${index + 1}<small>${escapeHtml(formatDate(session.completed_at))}</small></th>
     <td><span class="memory-state ${session.memory_enabled ? "is-enabled" : ""}">${session.memory_enabled ? "Enabled" : "Disabled"}</span><small>${escapeHtml(session.learning_policy_version)}</small></td>
-    ${Object.keys(scoreLabels).map((key) => {
+    ${Object.keys(SCORE_LABELS).map((key) => {
       const score = session.scores[key] || { matches: 0, total: 0, percentage: null };
       const value = score.percentage == null ? 0 : score.percentage;
       return `<td><div class="trend-value"><span class="trend-bar"><i style="width:${value}%"></i></span><strong>${score.percentage == null ? "—" : `${score.percentage}%`}</strong></div><small>${score.matches} of ${score.total}</small></td>`;
     }).join("")}
   </tr>`).join("");
-  const trendSection = trend.length ? `<div class="score-section trend-section"><h3>Review-session trend</h3><div class="trend-status-grid">${trendStatus}</div><div class="trend-table-wrap"><table class="trend-table"><thead><tr><th>Session</th><th>Learning memory</th>${Object.values(scoreLabels).map((label) => `<th>${label}</th>`).join("")}</tr></thead><tbody>${trendRows}</tbody></table></div></div>` : "";
+  const trendSection = trend.length ? `<div class="score-section trend-section"><h3>Review-session trend</h3><div class="trend-status-grid">${trendStatus}</div><div class="trend-table-wrap"><table class="trend-table"><thead><tr><th>Session</th><th>Learning memory</th>${Object.values(SCORE_LABELS).map((label) => `<th>${label}</th>`).join("")}</tr></thead><tbody>${trendRows}</tbody></table></div></div>` : "";
   const diagnostics = report.diagnostics || {
     omissions: 0,
     unsupported_mappings: 0,
@@ -1396,6 +1425,25 @@ function renderReviewReport() {
     <div class="learning-diagnostics" aria-label="Learning diagnostics"><span><strong>${diagnostics.omissions}</strong> omissions corrected</span><span><strong>${diagnostics.unsupported_mappings}</strong> unsupported mappings removed</span><span title="A mapping MELvan rated at least 80% confidence that a Reviewer later corrected or removed."><strong>${diagnostics.high_confidence_errors}</strong> high-confidence errors <small>Mappings rated at least 80% that Reviewers corrected or removed</small></span><span><strong>${diagnostics.tentative_mappings_presented}</strong> low-confidence mappings <small>${diagnostics.tentative_mappings_accepted} accepted · ${diagnostics.tentative_mappings_rejected} rejected</small></span></div>
     ${trendSection}`;
   refreshIcons();
+}
+
+function renderAdministratorMetrics() {
+  const root = $("#administrator-metrics");
+  if (!root || !canViewAdministratorMetrics()) return;
+  const metrics = state.administratorMetrics;
+  if (!metrics || !metrics.scored_reviews) {
+    root.innerHTML = emptyState(
+      "chart-no-axes-combined",
+      "MELvan performance metrics will appear after the first scored review.",
+    );
+    return;
+  }
+  root.innerHTML = `
+    <div class="workspace-metrics-summary">
+      <strong>${metrics.scored_reviews}</strong>
+      <span>scored review${metrics.scored_reviews === 1 ? "" : "s"} across ${metrics.completed_review_sessions} completed review session${metrics.completed_review_sessions === 1 ? "" : "s"}</span>
+    </div>
+    <div class="score-grid">${scoreGrid(metrics.lifetime_scores)}</div>`;
 }
 
 function reviewCard(statement) {

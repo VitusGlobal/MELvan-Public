@@ -156,6 +156,57 @@ class WorkspaceIsolationTestCase(unittest.TestCase):
         )
         self.assertEqual(404, status)
 
+    def test_administrator_metrics_are_isolated_by_workspace(self) -> None:
+        with self.service.workspace(self.admin_a["workspace_id"]):
+            statement = self.service.create_statement(
+                "Care providers are using new practices in treatment planning.",
+                self.admin_a["id"],
+            )
+            with self.database.connection() as connection:
+                element = connection.execute(
+                    """
+                    SELECT id FROM elements
+                    WHERE workspace_id = melvan_workspace_id()
+                      AND logic_model_id IS NOT NULL AND status = 'published'
+                    ORDER BY display_id LIMIT 1
+                    """
+                ).fetchone()
+                connection.execute(
+                    "DELETE FROM analysis_mappings WHERE analysis_id = ?",
+                    (statement["analysis"]["id"],),
+                )
+                connection.execute(
+                    "INSERT INTO analysis_mappings "
+                    "(analysis_id, element_id, rank, confidence, rationale) "
+                    "VALUES (?, ?, 1, 0.9, 'Workspace isolation test mapping.')",
+                    (statement["analysis"]["id"], element["id"]),
+                )
+                connection.execute(
+                    "UPDATE analyses SET match_status = 'existing_match' WHERE id = ?",
+                    (statement["analysis"]["id"],),
+                )
+            self.service.accept_statement(
+                statement["id"], statement["analysis"]["id"], self.admin_a["id"]
+            )
+
+        status, alpha = self.api.dispatch(
+            "GET", "/api/admin/metrics", token=self.admin_a_token
+        )
+        self.assertEqual(200, status)
+        self.assertEqual(1, alpha["metrics"]["scored_reviews"])
+
+        status, beta = self.api.dispatch(
+            "GET", "/api/admin/metrics", token=self.admin_b_token
+        )
+        self.assertEqual(200, status)
+        self.assertEqual(0, beta["metrics"]["scored_reviews"])
+        self.assertTrue(
+            all(
+                score["percentage"] is None
+                for score in beta["metrics"]["lifetime_scores"].values()
+            )
+        )
+
     def test_owner_lists_and_manages_administrators_only(self) -> None:
         workspace_user, _ = self._create_workspace_user(
             self.admin_a_token,

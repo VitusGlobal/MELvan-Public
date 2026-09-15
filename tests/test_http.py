@@ -233,6 +233,31 @@ class HTTPTestCase(unittest.TestCase):
         self.assertEqual(0, exported["record_count"])
         self.assertTrue(base64.b64decode(exported["data_base64"]).startswith(b"%PDF-1.4"))
 
+    def test_workspace_metrics_are_available_only_to_active_administrators(self) -> None:
+        status, response = self.api.dispatch(
+            "GET", "/api/admin/metrics", token=self.admin_token
+        )
+        self.assertEqual(200, status)
+        self.assertEqual(0, response["metrics"]["scored_reviews"])
+        self.assertEqual(
+            {
+                "first_review_approval",
+                "correct_level",
+                "correct_direction",
+                "correct_mapping",
+                "overall_hygiene",
+            },
+            set(response["metrics"]["lifetime_scores"]),
+        )
+
+        for token in (self.owner_token, self.reviewer_token):
+            with self.subTest(token=token):
+                status, response = self.api.dispatch(
+                    "GET", "/api/admin/metrics", token=token
+                )
+                self.assertEqual(403, status)
+                self.assertIn("role does not permit", response["error"])
+
     def test_administrator_sees_temporary_lockout_separately_from_user_status(self) -> None:
         for _ in range(3):
             status, _ = self.api.dispatch(

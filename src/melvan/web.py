@@ -351,6 +351,9 @@ class APIApplication:
             if method == "GET" and path == "/api/admin/users":
                 self._require_admin(roles)
                 return HTTPStatus.OK, {"users": self._administrator_users(user)}
+            if method == "GET" and path == "/api/admin/metrics":
+                self._require_role(roles, "administrator")
+                return HTTPStatus.OK, {"metrics": self.service.workspace_metrics()}
             if method == "POST" and path == "/api/admin/users":
                 self._require_admin(roles)
                 if "owner" in roles and set(body.get("roles") or []) != {

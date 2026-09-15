@@ -234,10 +234,9 @@ class ModelValidationTestCase(unittest.TestCase):
         self.assertEqual("string", direction["type"])
         self.assertEqual(["Positive", "Negative"], direction["enum"])
 
-    def test_model_contract_allows_only_outcome_proposals(self) -> None:
+    def test_model_contract_prohibits_logic_model_proposals(self) -> None:
         schema = OpenAIModelAdapter._schema()
-        proposed = schema["properties"]["proposed_element"]["anyOf"][0]
-        self.assertEqual(["Outcome"], proposed["properties"]["element_type"]["enum"])
+        self.assertEqual("null", schema["properties"]["proposed_element"]["type"])
 
         payload = valid_payload()
         payload.update(
@@ -252,7 +251,7 @@ class ModelValidationTestCase(unittest.TestCase):
                 },
             }
         )
-        with self.assertRaisesRegex(ModelError, "never a new Output"):
+        with self.assertRaisesRegex(ModelError, "cannot propose or create"):
             validate_result(payload, ELEMENTS, "gpt-5-mini")
 
     def test_refresh_command_can_supply_in_memory_token(self) -> None:

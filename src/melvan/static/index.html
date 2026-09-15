@@ -201,6 +201,10 @@
           <i data-lucide="users" aria-hidden="true"></i>
           <span>Users</span>
         </button>
+        <button class="tab" type="button" role="tab" aria-selected="false" data-view="melvan-metrics" data-role="administrator-metrics">
+          <i data-lucide="chart-no-axes-combined" aria-hidden="true"></i>
+          <span>MELvan metrics</span>
+        </button>
       </nav>
     </header>
 
@@ -413,6 +417,24 @@
           </div>
           <div id="user-form-region" hidden></div>
           <div id="users-list" class="users-table" aria-live="polite"></div>
+        </section>
+      </section>
+
+      <section class="view" id="view-melvan-metrics" role="tabpanel" hidden>
+        <div class="view-heading">
+          <div>
+            <p class="eyebrow">Administrator</p>
+            <h1>MELvan metrics</h1>
+          </div>
+        </div>
+        <section class="admin-section" aria-labelledby="melvan-metrics-heading">
+          <div class="section-heading">
+            <div>
+              <h2 id="melvan-metrics-heading">MELvan lifetime score</h2>
+              <p>Overall performance for this workspace</p>
+            </div>
+          </div>
+          <div id="administrator-metrics" aria-live="polite"></div>
         </section>
       </section>
     </main>

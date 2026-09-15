@@ -184,7 +184,6 @@ class DemoModelAdapter(ModelAdapter):
             elements,
         )
 
-        proposed = None
         if matches:
             match_status = "existing_match"
             mapping_decisions = [
@@ -203,13 +202,6 @@ class DemoModelAdapter(ModelAdapter):
             match_status = "no_suitable_match"
             mapping_decisions = []
             no_match_rationale = "No existing element has enough substantive overlap for a defensible placement."
-            if not rejected_proposal and classification == "Outcome":
-                proposed_type = "Outcome"
-                proposed = ProposedElement(
-                    element_type=proposed_type,
-                    label=self._proposal_label(summary, proposed_type),
-                    reason="The existing catalogue does not describe this result closely enough.",
-                )
 
         return AnalysisResult(
             summary=summary,
@@ -222,7 +214,7 @@ class DemoModelAdapter(ModelAdapter):
             match_status=match_status,
             mapping_decisions=mapping_decisions,
             no_match_rationale=no_match_rationale,
-            proposed_element=proposed,
+            proposed_element=None,
             model_version=self.model_version,
         )
 
@@ -694,10 +686,10 @@ class OpenAIModelAdapter(ModelAdapter):
             "confidence to multiple mappings. Return a mapping decision only when its confidence is "
             "at least 0.25. Scores from 0.25 up to but not including 0.50 are tentative hypotheses; "
             "scores of 0.50 or more are supported mappings. Return no more than three tentative "
-            "mapping decisions. Only return "
-            "no_suitable_match and a proposed Outcome "
-            "when no suitable existing Outcome exists; never propose a new Output. Low confidence alone is not a "
-            "reason to propose. Reviewer comments are prioritized instructions. Do not invent "
+            "mapping decisions. Return no_suitable_match when no suitable existing Logic Model "
+            "element exists. Never propose or invent an Output, Outcome, Working Outcome, or "
+            "Logic Model ID; only an Administrator can change the Logic Model. Reviewer comments "
+            "are prioritized instructions. Do not invent "
             "facts, framework IDs, or uses outside MELvan's stated purpose."
             " approved_examples are separately labelled, Reviewer-verified case precedents. "
             "Use relevant examples as guidance, including negative counterexamples, but assess "
@@ -711,16 +703,6 @@ class OpenAIModelAdapter(ModelAdapter):
 
     @staticmethod
     def _schema() -> dict[str, Any]:
-        proposed = {
-            "type": "object",
-            "additionalProperties": False,
-            "properties": {
-                "element_type": {"type": "string", "enum": ["Outcome"]},
-                "label": {"type": "string"},
-                "reason": {"type": "string"},
-            },
-            "required": ["element_type", "label", "reason"],
-        }
         return {
             "type": "object",
             "additionalProperties": False,
@@ -757,7 +739,7 @@ class OpenAIModelAdapter(ModelAdapter):
                     },
                 },
                 "no_match_rationale": {"type": "string"},
-                "proposed_element": {"anyOf": [proposed, {"type": "null"}]},
+                "proposed_element": {"type": "null"},
             },
             "required": [
                 "summary",
@@ -1130,12 +1112,8 @@ def validate_result(
     else:
         raise ModelError("The model returned an invalid match status.")
 
-    proposed_payload = payload.get("proposed_element")
-    if proposed_payload and proposed_payload.get("element_type") != "Outcome":
-        raise ModelError("The model may propose a new Outcome, but never a new Output.")
-    proposed = ProposedElement(**proposed_payload) if proposed_payload else None
-    if proposed and status != "no_suitable_match":
-        raise ModelError("A proposal requires no_suitable_match.")
+    if payload.get("proposed_element") is not None:
+        raise ModelError("The model cannot propose or create Logic Model elements.")
 
     return AnalysisResult(
         summary=str(payload["summary"]).strip(),
@@ -1148,7 +1126,7 @@ def validate_result(
         match_status=status,
         mapping_decisions=decisions,
         no_match_rationale=str(payload.get("no_match_rationale") or "").strip(),
-        proposed_element=proposed,
+        proposed_element=None,
         model_version=model_version,
     )
 

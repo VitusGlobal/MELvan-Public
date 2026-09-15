@@ -917,6 +917,19 @@ select[multiple] {
   font-size: 20px;
 }
 
+.workspace-metrics-summary {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 14px;
+  color: var(--muted);
+}
+
+.workspace-metrics-summary strong {
+  color: var(--ink);
+  font-size: 24px;
+}
+
 .learning-diagnostics {
   display: flex;
   flex-wrap: wrap;

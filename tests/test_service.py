@@ -8,7 +8,7 @@ from pathlib import Path
 from unittest import mock
 
 from melvan.db import Database
-from melvan.model import DemoModelAdapter, MappingDecision
+from melvan.model import DemoModelAdapter, MappingDecision, ProposedElement
 from melvan.service import DomainError, MelvanService
 
 
@@ -594,23 +594,98 @@ class ServiceTestCase(unittest.TestCase):
         self.assertEqual(409, accept_error.exception.status)
         self.assertEqual(2, revised["analysis"]["version"])
 
-    def test_rejecting_proposal_deletes_record_but_retains_audit(self) -> None:
-        statement = self.service.create_statement("Mosquito prevalence decreased.")
-        proposal = statement["proposed_element"]
-        self.assertIsNotNone(proposal)
-        revised = self.service.submit_feedback(
-            statement["id"],
-            {"analysis_id": statement["analysis"]["id"], "reject_proposal": True},
+    def test_provider_proposal_is_not_persisted_as_a_logic_model_mapping(self) -> None:
+        baseline = self.service.model.analyze(
+            "We're making excellent progress on the machine learning system.",
+            self.service._catalogue_for_matching(),
         )
-        self.assertIsNone(revised["proposed_element"])
-        self.assertEqual([], revised["mappings"])
+        provider_result = replace(
+            baseline,
+            match_status="no_suitable_match",
+            mapping_decisions=[],
+            no_match_rationale="No approved Logic Model element is a defensible match.",
+            proposed_element=ProposedElement(
+                element_type="Outcome",
+                label=(
+                    "Increased positive perception and confidence among stakeholders "
+                    "about the AI model following peer review"
+                ),
+                reason="Provider-generated suggestion.",
+            ),
+        )
+        with mock.patch.object(self.service.model, "analyze", return_value=provider_result):
+            statement = self.service.create_statement(
+                "We're making excellent progress on the machine learning system."
+            )
+
+        self.assertEqual("no_suitable_match", statement["analysis"]["match_status"])
+        self.assertEqual([], statement["mappings"])
+        self.assertIsNone(statement["proposed_element"])
         with self.database.connection() as connection:
-            element = connection.execute("SELECT id FROM elements WHERE id = ?", (proposal["id"],)).fetchone()
-            audit = connection.execute(
-                "SELECT details_json FROM audit_events WHERE event_type = 'provisional_element_rejected'"
-            ).fetchone()
-        self.assertIsNone(element)
-        self.assertEqual(proposal["label"], json.loads(audit["details_json"])["label"])
+            self.assertEqual(
+                0,
+                connection.execute(
+                    "SELECT COUNT(*) FROM elements WHERE source = 'model'"
+                ).fetchone()[0],
+            )
+            self.assertEqual(
+                0,
+                connection.execute(
+                    "SELECT COUNT(*) FROM analysis_mappings WHERE analysis_id = ?",
+                    (statement["analysis"]["id"],),
+                ).fetchone()[0],
+            )
+
+    def test_historical_working_outcome_is_retained_for_audit_but_not_displayed(self) -> None:
+        statement = self.service.create_statement("A planning meeting was completed.")
+        analysis_id = statement["analysis"]["id"]
+        proposal_id = "WP-edf24d018030"
+        with self.database.connection() as connection:
+            connection.execute(
+                """
+                INSERT INTO elements
+                    (id, display_id, logic_model_id, label, element_type, level,
+                     group_name, source, status, created_at)
+                VALUES (?, ?, NULL, ?, 'Outcome', 'working_outcome',
+                        'MELvan proposal', 'model', 'provisional', ?)
+                """,
+                (
+                    proposal_id,
+                    proposal_id,
+                    "Increased positive perception and confidence among stakeholders",
+                    "2026-07-30T14:56:00+00:00",
+                ),
+            )
+            connection.execute(
+                "DELETE FROM analysis_mappings WHERE analysis_id = ?", (analysis_id,)
+            )
+            connection.execute(
+                "INSERT INTO analysis_mappings "
+                "(analysis_id, element_id, rank, confidence, rationale) "
+                "VALUES (?, ?, 1, NULL, NULL)",
+                (analysis_id, proposal_id),
+            )
+            connection.execute(
+                "UPDATE analyses SET proposed_element_id = ? WHERE id = ?",
+                (proposal_id, analysis_id),
+            )
+
+        retrieved = self.service.get_statement(statement["id"])
+        self.assertEqual([], retrieved["mappings"])
+        self.assertIsNone(retrieved["proposed_element"])
+        with self.database.connection() as connection:
+            self.assertIsNotNone(
+                connection.execute(
+                    "SELECT id FROM elements WHERE id = ?", (proposal_id,)
+                ).fetchone()
+            )
+            self.assertEqual(
+                1,
+                connection.execute(
+                    "SELECT COUNT(*) FROM analysis_mappings WHERE analysis_id = ?",
+                    (analysis_id,),
+                ).fetchone()[0],
+            )
 
     def test_reviewer_cannot_create_a_logic_model_element(self) -> None:
         statement = self.service.create_statement("Community belonging improved significantly.")
@@ -663,14 +738,42 @@ class ServiceTestCase(unittest.TestCase):
         self.service.accept_statement(second["id"], corrected["analysis"]["id"])
         self.assertEqual({"matches": 1, "total": 2, "percentage": 50.0}, self.service.classification_agreement())
 
-    def test_model_proposal_cannot_be_accepted_without_an_approved_mapping(self) -> None:
+    def test_workspace_metrics_reuse_lifetime_review_scoring(self) -> None:
+        empty = self.service.workspace_metrics()
+        self.assertEqual(0, empty["scored_reviews"])
+        self.assertEqual(0, empty["completed_review_sessions"])
+        self.assertTrue(
+            all(score["percentage"] is None for score in empty["lifetime_scores"].values())
+        )
+
+        statement = self.service.create_statement(
+            "Care providers are using PMH-aligned practices in treatment planning."
+        )
+        statement = self.make_acceptable(statement)
+        self.service.accept_statement(statement["id"], statement["analysis"]["id"])
+        metrics = self.service.workspace_metrics()
+
+        self.assertEqual(1, metrics["scored_reviews"])
+        self.assertEqual(
+            {
+                "first_review_approval",
+                "correct_level",
+                "correct_direction",
+                "correct_mapping",
+                "overall_hygiene",
+            },
+            set(metrics["lifetime_scores"]),
+        )
+        self.assertEqual(
+            {"matches": 1, "total": 1, "percentage": 100.0},
+            metrics["lifetime_scores"]["first_review_approval"],
+        )
+
+    def test_no_match_cannot_be_accepted_without_an_approved_mapping(self) -> None:
         statement = self.service.create_statement("Mosquito prevalence decreased.")
-        proposal_id = statement["proposed_element"]["id"]
+        self.assertIsNone(statement["proposed_element"])
         with self.assertRaisesRegex(DomainError, "approved Logic Model mapping"):
             self.service.accept_statement(statement["id"], statement["analysis"]["id"])
-        with self.database.connection() as connection:
-            element = connection.execute("SELECT status FROM elements WHERE id = ?", (proposal_id,)).fetchone()
-        self.assertEqual("provisional", element["status"])
 
     def test_no_match_classification_change_remains_pending(self) -> None:
         statement = self.service.create_statement("Mosquito prevalence decreased.")

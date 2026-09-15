@@ -3,6 +3,25 @@
 This changelog begins with the first reviewed public-release candidate. Private
 development chronology and acceptance records are intentionally excluded.
 
+## 1.1.0 - 2026-09-15
+
+- Added an Administrator-only **MELvan metrics** tab beside **Users**.
+- Displayed every established workspace lifetime measure using the Reviewer
+  report's numerator, eligible denominator, and percentage calculation.
+- Added a clear no-scored-reviews state and enforced active-role and workspace
+  isolation at the API boundary.
+
+## 1.0.1 - 2026-09-15
+
+- Prevented model-generated `WP-*` working Outcomes from being created or shown
+  as Logic Model mappings.
+- Limited displayed and selectable mappings to nodes in committed Logic Model
+  versions; otherwise MELvan records **No suitable existing match**.
+- Preserved historical synthetic rows for audit while excluding them from
+  display, future matching, and Evidence acceptance.
+- Constrained the model prompt and response schema so providers do not spend
+  tokens drafting framework elements that only Administrators may create.
+
 ## 1.0.0 - 2026-08-19
 
 - Marked MELvan's first stable product milestone following acceptance of the

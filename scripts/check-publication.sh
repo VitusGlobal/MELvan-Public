@@ -33,7 +33,7 @@ if rg -n -i \
   fail "internal chronology, identity, path, or deployment value remains"
 fi
 
-if find . -path './.venv*' -prune -o -type f \
+if find . \( -path './.git' -o -path './.venv*' \) -prune -o -type f \
   \( -name '.env' -o -name '*.sqlite' -o -name '*.sqlite3' \
   -o -name '*.db' -o -name 'users.json' -o -name '.DS_Store' \) \
   -print | grep -q .; then

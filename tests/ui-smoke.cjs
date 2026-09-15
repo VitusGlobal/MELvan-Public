@@ -259,6 +259,28 @@ async function installRoutes(page) {
         }),
       });
     }
+    if (url.pathname === "/api/admin/metrics" && request.method() === "GET") {
+      if (activeRole !== "administrator") {
+        return route.fulfill({ status: 403, contentType: "application/json", body: JSON.stringify({ error: "Your role does not permit this action." }) });
+      }
+      return route.fulfill({
+        contentType: "application/json",
+        body: JSON.stringify({
+          metrics: {
+            scoring_policy_version: "review-scoring-v2",
+            scored_reviews: 12,
+            completed_review_sessions: 3,
+            lifetime_scores: {
+              first_review_approval: { matches: 9, total: 12, percentage: 75 },
+              correct_level: { matches: 11, total: 12, percentage: 91.7 },
+              correct_direction: { matches: 7, total: 8, percentage: 87.5 },
+              correct_mapping: { matches: 10, total: 12, percentage: 83.3 },
+              overall_hygiene: { matches: 12, total: 12, percentage: 100 },
+            },
+          },
+        }),
+      });
+    }
     if (url.pathname === "/api/review" && request.method() === "GET") {
       if (store.review.length && !store.reviewSession) {
         store.reviewSession = { id: "review-session-ui", reviewer_id: currentUser.id, status: "open", started_at: "2026-07-18T17:00:00+00:00" };
@@ -720,6 +742,7 @@ async function signIn(page, email, password = "Password1!") {
     await signIn(admin, "owner@example.org");
     await admin.getByRole("button", { name: /Own MELvan/ }).click();
     await admin.getByRole("tab", { name: "Users" }).waitFor();
+    if (await admin.getByRole("tab", { name: "MELvan metrics" }).isVisible()) throw new Error("Owner can see Administrator metrics without assuming the Administrator role.");
     if (await admin.getByRole("button", { name: "Export Evidence PDF" }).isVisible()) throw new Error("Evidence export is visible with no Evidence.");
     if (await admin.getByRole("tab", { name: "Report" }).isVisible()) throw new Error("Administrator can see Report without that role.");
     if (await admin.getByRole("tab", { name: "Review" }).isVisible()) throw new Error("Administrator can see Review without that role.");
@@ -791,6 +814,23 @@ async function signIn(page, email, password = "Password1!") {
     if (await admin.locator('.user-form input[name="access_id"]').count()) throw new Error("New user form still exposes a permanent access ID.");
     await assertNoOverflow(admin, "desktop Users");
     await admin.screenshot({ path: path.join(artifacts, "admin-desktop.png"), fullPage: true });
+
+    const metricsPage = await browser.newPage({ viewport: { width: 1280, height: 900 } });
+    metricsPage.on("console", (message) => { if (message.type() === "error") errors.push(message.text()); });
+    metricsPage.on("pageerror", (error) => errors.push(error.message));
+    await installRoutes(metricsPage);
+    await metricsPage.goto("http://melvan.local/", { waitUntil: "networkidle" });
+    await signIn(metricsPage, "admin.alpha@example.org");
+    await metricsPage.getByRole("tab", { name: "MELvan metrics" }).click();
+    await metricsPage.getByRole("heading", { name: "MELvan lifetime score" }).waitFor();
+    await metricsPage.getByText("12 scored reviews across 3 completed review sessions", { exact: true }).waitFor();
+    for (const label of ["First-review approval", "Correct level", "Correct direction", "Correct mapping", "No hallucination/toxic content"]) {
+      await metricsPage.getByText(label, { exact: true }).waitFor();
+    }
+    await assertNoOverflow(metricsPage, "desktop MELvan metrics");
+    await metricsPage.setViewportSize({ width: 390, height: 844 });
+    await assertNoOverflow(metricsPage, "mobile MELvan metrics");
+    await metricsPage.screenshot({ path: path.join(artifacts, "administrator-metrics-mobile.png"), fullPage: true });
 
     const observedStatement = makeStatement();
     const observedEvidence = makeStatement();

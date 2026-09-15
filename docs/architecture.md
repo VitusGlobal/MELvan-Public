@@ -33,6 +33,11 @@ Evidence acceptance, or silent rewriting of historical records.
 - `learning.py` ranks Reviewer-confirmed precedents without changing weights.
 - `pdf_export.py` produces workspace-scoped Evidence exports.
 
+The Administrator-only metrics endpoint reads the same workspace-scoped scoring
+events and score-summary function used by Reviewer completion reports. It does
+not maintain a second aggregate or accept a workspace identifier from the
+browser.
+
 ## Isolation and authorization
 
 Every program record belongs to an immutable workspace. The server derives the
@@ -84,7 +89,11 @@ Model elements, and selected learning examples. MELvan's versioned processing
 rules, prompts, schemas, validation, and tests embody the logic of the canonical
 foundational references; a separately loaded runtime context pack is not
 required. It returns structured JSON validated by MELvan. Provider output is
-never written directly to Evidence. Review remains the authority boundary.
+never written directly to Evidence. A displayed mapping must identify an
+existing node in a committed Logic Model version. When none is suitable, MELvan
+records **No suitable existing match**; it never invents or persists a working
+Output, Outcome, or framework identifier. Only an Administrator can change the
+Logic Model. Review remains the authority boundary.
 
 Voice audio is transient. Accepted photo files use opaque workspace-scoped keys
 and are authorized through their relational Statement records.

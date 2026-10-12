@@ -3,6 +3,15 @@
 This changelog begins with the first reviewed public-release candidate. Private
 development chronology and acceptance records are intentionally excluded.
 
+## 1.2.3 - 2026-10-12
+
+- Corrected migration connection selection so Alembic uses the explicitly
+  supplied migration identity instead of an application runtime URL present in
+  the environment.
+- Kept the pinned Azurite integration service compatible with newer Azure
+  Storage SDK API headers by enabling the emulator's API-version bypass.
+- Added contract coverage for both integration-job requirements.
+
 ## 1.2.2 - 2026-10-12
 
 - Allowed intentional copyright-holder attribution in `LICENSE.md` without

@@ -6,6 +6,18 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class AzureDeploymentContractTests(unittest.TestCase):
+    def test_integration_services_use_explicit_migration_identity_and_compatible_azurite(self) -> None:
+        compose = (ROOT / "compose.yaml").read_text(encoding="utf-8")
+        migration_environment = (ROOT / "migrations/env.py").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn("--skipApiVersionCheck", compose)
+        self.assertIn(
+            'config.get_main_option("sqlalchemy.url") or os.getenv("MELVAN_DATABASE_URL")',
+            migration_environment,
+        )
+
     def test_publication_gate_allows_intentional_attribution_without_ripgrep(self) -> None:
         script = (ROOT / "scripts/check-publication.sh").read_text()
 

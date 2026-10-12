@@ -11,7 +11,7 @@ config = context.config
 if config.config_file_name:
     fileConfig(config.config_file_name)
 
-database_url = os.getenv("MELVAN_DATABASE_URL") or config.get_main_option("sqlalchemy.url")
+database_url = config.get_main_option("sqlalchemy.url") or os.getenv("MELVAN_DATABASE_URL")
 if not database_url:
     raise RuntimeError(
         "A PostgreSQL URL is required through MELVAN_DATABASE_URL or Alembic configuration."

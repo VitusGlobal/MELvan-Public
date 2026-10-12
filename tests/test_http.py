@@ -240,6 +240,11 @@ class HTTPTestCase(unittest.TestCase):
         self.assertEqual(200, status)
         self.assertEqual(0, response["metrics"]["scored_reviews"])
         self.assertEqual(
+            {"statement": 0, "evidence_reassessment": 0},
+            response["metrics"]["review_cycles"],
+        )
+        self.assertEqual(0, response["metrics"]["current_evidence"])
+        self.assertEqual(
             {
                 "first_review_approval",
                 "correct_level",

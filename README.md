@@ -106,8 +106,8 @@ docker compose --profile check run --rm postgres-check
 
 ## Licenses
 
-MELvan software is licensed under the [GNU Affero General Public License,
-version 3 or later](LICENSE). Documentation is licensed under
+MELvan software is licensed under the [MIT License](LICENSE.md). Documentation is licensed under
 [CC BY-SA 4.0](DOCUMENTATION-LICENSE.md), and the MELvan logo is licensed under
 [CC BY 4.0](ASSET-LICENSES.md). Third-party components retain their respective
-licenses.
+licenses. See [project attribution](NOTICE.md) and
+[citation metadata](CITATION.cff) for credits and citation guidance.

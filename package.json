@@ -1,8 +1,8 @@
 {
   "name": "melvan-browser-tests",
   "private": true,
-  "version": "1.1.0",
-  "license": "AGPL-3.0-or-later",
+  "version": "1.2.0",
+  "license": "MIT",
   "scripts": {
     "test:ui": "node tests/ui-smoke.cjs"
   },

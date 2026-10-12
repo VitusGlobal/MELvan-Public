@@ -23,6 +23,16 @@ view of all lifetime performance measures for that workspace. An **Owner**
 creates and manages Administrators and may observe their workspaces in read-only
 mode.
 
+The metrics total counts scoring events, split between initial Statement reviews
+and Logic Model update reviews, and is shown alongside the current Evidence
+count. One Evidence record may have an initial score and a later reassessment
+score, while appearing only once in the Evidence PDF export.
+
+Every authenticated role can open the shared, read-only **About MELvan** tab.
+It contains the product FAQ, project attribution, methodology, quality measures,
+suitability guidance, access options, and links to open resources. This shared
+information does not expand the active role's operational permissions.
+
 ## First-time access
 
 An authorized user requests a temporary password from the sign-in screen. When

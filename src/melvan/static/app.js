@@ -418,7 +418,7 @@ function isOwnerHome() {
 }
 
 function allowedViews() {
-  const values = new Set(["logic-model"]);
+  const values = new Set(["logic-model", "about-melvan"]);
   if (roles().has("reporter")) values.add("report");
   if (roles().has("reporter")) values.add("my-statements");
   if (canViewReviewWorkspace()) {
@@ -1438,10 +1438,14 @@ function renderAdministratorMetrics() {
     );
     return;
   }
+  const statementReviews = metrics.review_cycles?.statement || 0;
+  const evidenceReviews = metrics.review_cycles?.evidence_reassessment || 0;
+  const currentEvidence = metrics.current_evidence || 0;
   root.innerHTML = `
     <div class="workspace-metrics-summary">
       <strong>${metrics.scored_reviews}</strong>
-      <span>scored review${metrics.scored_reviews === 1 ? "" : "s"} across ${metrics.completed_review_sessions} completed review session${metrics.completed_review_sessions === 1 ? "" : "s"}</span>
+      <span>scored review event${metrics.scored_reviews === 1 ? "" : "s"} across ${metrics.completed_review_sessions} completed review session${metrics.completed_review_sessions === 1 ? "" : "s"}</span>
+      <small>${statementReviews} initial Statement review${statementReviews === 1 ? "" : "s"} · ${evidenceReviews} Logic Model update review${evidenceReviews === 1 ? "" : "s"} · ${currentEvidence} current Evidence record${currentEvidence === 1 ? "" : "s"}</small>
     </div>
     <div class="score-grid">${scoreGrid(metrics.lifetime_scores)}</div>`;
 }

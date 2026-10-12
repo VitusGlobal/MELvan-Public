@@ -741,6 +741,10 @@ class ServiceTestCase(unittest.TestCase):
     def test_workspace_metrics_reuse_lifetime_review_scoring(self) -> None:
         empty = self.service.workspace_metrics()
         self.assertEqual(0, empty["scored_reviews"])
+        self.assertEqual(
+            {"statement": 0, "evidence_reassessment": 0}, empty["review_cycles"]
+        )
+        self.assertEqual(0, empty["current_evidence"])
         self.assertEqual(0, empty["completed_review_sessions"])
         self.assertTrue(
             all(score["percentage"] is None for score in empty["lifetime_scores"].values())
@@ -754,6 +758,10 @@ class ServiceTestCase(unittest.TestCase):
         metrics = self.service.workspace_metrics()
 
         self.assertEqual(1, metrics["scored_reviews"])
+        self.assertEqual(
+            {"statement": 1, "evidence_reassessment": 0}, metrics["review_cycles"]
+        )
+        self.assertEqual(1, metrics["current_evidence"])
         self.assertEqual(
             {
                 "first_review_approval",
@@ -1308,6 +1316,12 @@ class ServiceTestCase(unittest.TestCase):
         current_evidence = self.service.evidence()[0]
         self.assertEqual("2.0", current_evidence["analysis"]["logic_model_version"])
         self.assertEqual(0.55, current_evidence["mappings"][0]["confidence"])
+        metrics = self.service.workspace_metrics()
+        self.assertEqual(2, metrics["scored_reviews"])
+        self.assertEqual(
+            {"statement": 1, "evidence_reassessment": 1}, metrics["review_cycles"]
+        )
+        self.assertEqual(1, metrics["current_evidence"])
 
     def test_evidence_reassessment_change_is_authoritative_and_scored(self) -> None:
         self._accepted_mo4_evidence()

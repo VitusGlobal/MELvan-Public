@@ -919,6 +919,7 @@ select[multiple] {
 
 .workspace-metrics-summary {
   display: flex;
+  flex-wrap: wrap;
   align-items: baseline;
   gap: 8px;
   margin-bottom: 14px;
@@ -928,6 +929,12 @@ select[multiple] {
 .workspace-metrics-summary strong {
   color: var(--ink);
   font-size: 24px;
+}
+
+.workspace-metrics-summary small {
+  flex: 0 0 100%;
+  color: var(--muted);
+  line-height: 1.5;
 }
 
 .learning-diagnostics {
@@ -2519,6 +2526,78 @@ select[multiple] {
   border: 0;
 }
 
+.about-heading > div,
+.about-content {
+  width: min(860px, 100%);
+}
+
+.about-heading > div > p:last-child {
+  margin: 10px 0 0;
+  color: var(--muted);
+  font-size: 16px;
+}
+
+.about-content section {
+  padding: 26px 0;
+  border-top: 1px solid var(--line-strong);
+}
+
+.about-content h2 {
+  margin-bottom: 12px;
+  color: var(--ink);
+  font-size: 22px;
+}
+
+.about-content h3 {
+  margin: 20px 0 8px;
+  color: var(--accent-dark);
+  font-size: 16px;
+}
+
+.about-content p,
+.about-content li,
+.about-content dd {
+  color: var(--ink-soft);
+  line-height: 1.65;
+}
+
+.about-content p {
+  margin: 0 0 12px;
+}
+
+.about-content ul {
+  margin: 0 0 16px;
+  padding-left: 22px;
+}
+
+.about-content li + li {
+  margin-top: 6px;
+}
+
+.about-content dl {
+  margin: 16px 0 0;
+}
+
+.about-content dt {
+  margin-top: 18px;
+  color: var(--ink);
+  font-weight: 750;
+}
+
+.about-content dd {
+  margin: 5px 0 0;
+}
+
+.about-content a {
+  color: var(--accent-dark);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+}
+
+.about-resources {
+  overflow-wrap: anywhere;
+}
+
 @media (max-width: 620px) {
   .capture-tool {
     padding: 16px;
@@ -2665,13 +2744,17 @@ select[multiple] {
 
   .tabs {
     gap: 0;
+    overflow-x: auto;
+    overscroll-behavior-inline: contain;
+    scrollbar-width: thin;
   }
 
   .tab {
-    min-width: 0;
-    flex: 1;
+    min-width: 112px;
+    flex: 0 0 auto;
     min-height: 48px;
     padding-inline: 6px;
+    white-space: nowrap;
   }
 
   .workspace {

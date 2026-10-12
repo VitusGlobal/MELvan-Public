@@ -29,6 +29,6 @@ Evidence rules, or audit behavior should include an architecture decision note.
 ## License notice
 
 By submitting a contribution, you agree that software contributions are
-licensed under AGPL-3.0-or-later and documentation contributions are licensed
+licensed under the MIT License and documentation contributions are licensed
 under CC BY-SA 4.0. You represent that you have the right to submit the work
 under those terms.

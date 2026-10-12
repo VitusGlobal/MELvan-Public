@@ -54,7 +54,7 @@ class FrontendContractTestCase(unittest.TestCase):
             self.assertIn(behavior, JAVASCRIPT)
         self.assertIn("@keyframes head-no", CSS)
         self.assertIn('id="logout"', HTML)
-        for view in ("report", "my-statements", "review", "evidence", "logic-model", "users", "melvan-metrics"):
+        for view in ("report", "my-statements", "review", "evidence", "logic-model", "users", "melvan-metrics", "about-melvan"):
             self.assertIn(f'data-view="{view}"', HTML)
             self.assertIn(f'id="view-{view}"', HTML)
         self.assertIn('data-role="reporter"', HTML)
@@ -62,6 +62,7 @@ class FrontendContractTestCase(unittest.TestCase):
         self.assertIn('data-role="administrator"', HTML)
         self.assertIn("function allowedViews()", JAVASCRIPT)
         self.assertIn("function canViewAdministratorMetrics()", JAVASCRIPT)
+        self.assertIn('new Set(["logic-model", "about-melvan"])', JAVASCRIPT)
         self.assertEqual(5, HTML.count('src="/assets/melvan-logo.png"'))
         self.assertEqual(5, HTML.count("Capture results on the go using AI"))
         self.assertNotIn("Capture results on the go</small>", HTML)
@@ -91,6 +92,32 @@ class FrontendContractTestCase(unittest.TestCase):
             self.assertIn(label, JAVASCRIPT)
         self.assertIn('body: { role: button.dataset.assumeRole }', JAVASCRIPT)
         self.assertIn("state.activeRole ? [state.activeRole]", JAVASCRIPT)
+
+    def test_about_melvan_is_shared_read_only_faq_content(self) -> None:
+        tab = HTML.split('data-view="about-melvan"', 1)[0].rsplit('<button', 1)[1]
+        self.assertNotIn("data-role=", tab)
+        for heading in (
+            "Who developed MELvan?",
+            "What does MELvan stand for?",
+            "What is MELvan?",
+            "Why was MELvan made?",
+            "How is MELvan integrated into everyday work of leaders?",
+            "How does MELvan change the way evaluation data gets collected?",
+            "What is the methodology behind MELvan?",
+            "Who does what in MELvan?",
+            "How is MELvan evaluated as a tool?",
+            "What kind of values are behind MELvan?",
+            "Is MELvan suitable for my program?",
+            "How can I get a version of MELvan for my program?",
+            "Are there any free open access resources about MELvan?",
+        ):
+            self.assertIn(f"<h2>{heading}</h2>", HTML)
+        self.assertIn("An AI-assisted approach to capturing program impact", HTML)
+        self.assertIn("https://doi.org/10.5281/zenodo.18902209", HTML)
+        self.assertIn("https://doi.org/10.5281/zenodo.18456041", HTML)
+        self.assertIn("mailto:roxana@vitus.ca", HTML)
+        self.assertIn(".about-content section", CSS)
+        self.assertIn("overflow-x: auto;", CSS)
 
     def test_reporter_context_and_history_controls_are_present(self) -> None:
         self.assertIn('id="statement-context"', HTML)
@@ -262,6 +289,10 @@ class FrontendContractTestCase(unittest.TestCase):
         ):
             self.assertIn(label, JAVASCRIPT)
         self.assertIn("MELvan performance metrics will appear after the first scored review.", JAVASCRIPT)
+        self.assertIn("scored review event", JAVASCRIPT)
+        self.assertIn("initial Statement review", JAVASCRIPT)
+        self.assertIn("Logic Model update review", JAVASCRIPT)
+        self.assertIn("current Evidence record", JAVASCRIPT)
         self.assertIn('/api/admin/metrics', JAVASCRIPT)
 
     def test_logic_model_builder_uses_section_specific_order_and_controls(self) -> None:

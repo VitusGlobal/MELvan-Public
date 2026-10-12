@@ -269,6 +269,8 @@ async function installRoutes(page) {
           metrics: {
             scoring_policy_version: "review-scoring-v2",
             scored_reviews: 12,
+            review_cycles: { statement: 10, evidence_reassessment: 2 },
+            current_evidence: 4,
             completed_review_sessions: 3,
             lifetime_scores: {
               first_review_approval: { matches: 9, total: 12, percentage: 75 },
@@ -504,6 +506,12 @@ async function signIn(page, email, password = "Password1!") {
     await page.getByText("What are you here to do?").waitFor();
     await page.getByRole("button", { name: /Report Capture/ }).click();
     await page.getByText("Dana Dual").waitFor();
+    await page.getByRole("tab", { name: "About MELvan" }).click();
+    await page.getByRole("heading", { name: "Frequently Asked Questions" }).waitFor();
+    await page.getByRole("heading", { name: "Who developed MELvan?" }).waitFor();
+    await assertNoOverflow(page, "desktop About MELvan");
+    await page.screenshot({ path: path.join(artifacts, "about-melvan-desktop.png"), fullPage: true });
+    await page.getByRole("tab", { name: "Report", exact: true }).click();
     if (await page.getByRole("tab", { name: "Users" }).isVisible()) throw new Error("Reporter session can see Users controls.");
     if (await page.getByRole("tab", { name: "Review", exact: true }).isVisible()) throw new Error("Reporter session can see Review controls.");
     const contextPrompt = "Add any context about this statement that you think is useful";
@@ -556,6 +564,7 @@ async function signIn(page, email, password = "Password1!") {
     await page.getByRole("button", { name: "Sign out" }).click();
     await signIn(page, "reva@example.org");
     await page.getByText("Reva Reviewer").waitFor();
+    await page.getByRole("tab", { name: "About MELvan" }).waitFor();
     if (await page.getByRole("tab", { name: "Report", exact: true }).isVisible()) throw new Error("Reviewer session can see Report controls.");
 
     await page.getByRole("tab", { name: "Review", exact: true }).click();
@@ -675,6 +684,11 @@ async function signIn(page, email, password = "Password1!") {
     await narrow.getByRole("button", { name: "Sign out" }).click();
     await signIn(narrow, "dana@example.org");
     await narrow.getByRole("button", { name: /Report Capture/ }).click();
+    await narrow.getByRole("tab", { name: "About MELvan" }).click();
+    await narrow.getByRole("heading", { name: "Frequently Asked Questions" }).waitFor();
+    await assertNoOverflow(narrow, "narrow About MELvan");
+    await narrow.screenshot({ path: path.join(artifacts, "about-melvan-narrow.png"), fullPage: true });
+    await narrow.getByRole("tab", { name: "Report", exact: true }).click();
     await narrow.getByRole("tab", { name: "Voice" }).click();
     await narrow.getByText("Record a voice note (up to 60 seconds) and MELvan will transcribe it for you.", { exact: true }).waitFor();
     await narrow.getByText("Up to 60 seconds", { exact: true }).waitFor();
@@ -742,6 +756,7 @@ async function signIn(page, email, password = "Password1!") {
     await signIn(admin, "owner@example.org");
     await admin.getByRole("button", { name: /Own MELvan/ }).click();
     await admin.getByRole("tab", { name: "Users" }).waitFor();
+    await admin.getByRole("tab", { name: "About MELvan" }).waitFor();
     if (await admin.getByRole("tab", { name: "MELvan metrics" }).isVisible()) throw new Error("Owner can see Administrator metrics without assuming the Administrator role.");
     if (await admin.getByRole("button", { name: "Export Evidence PDF" }).isVisible()) throw new Error("Evidence export is visible with no Evidence.");
     if (await admin.getByRole("tab", { name: "Report" }).isVisible()) throw new Error("Administrator can see Report without that role.");
@@ -821,9 +836,11 @@ async function signIn(page, email, password = "Password1!") {
     await installRoutes(metricsPage);
     await metricsPage.goto("http://melvan.local/", { waitUntil: "networkidle" });
     await signIn(metricsPage, "admin.alpha@example.org");
+    await metricsPage.getByRole("tab", { name: "About MELvan" }).waitFor();
     await metricsPage.getByRole("tab", { name: "MELvan metrics" }).click();
     await metricsPage.getByRole("heading", { name: "MELvan lifetime score" }).waitFor();
-    await metricsPage.getByText("12 scored reviews across 3 completed review sessions", { exact: true }).waitFor();
+    await metricsPage.getByText("12 scored review events across 3 completed review sessions", { exact: true }).waitFor();
+    await metricsPage.getByText("10 initial Statement reviews · 2 Logic Model update reviews · 4 current Evidence records", { exact: true }).waitFor();
     for (const label of ["First-review approval", "Correct level", "Correct direction", "Correct mapping", "No hallucination/toxic content"]) {
       await metricsPage.getByText(label, { exact: true }).waitFor();
     }

@@ -11,12 +11,14 @@ attachments, and local configuration are intentionally excluded.
 - [`.gitignore`](.gitignore) - Prevents local configuration, runtime data, dependencies, and build products from entering Git.
 - [`ASSET-LICENSES.md`](ASSET-LICENSES.md) - Records the license and attribution terms for bundled project assets.
 - [`CHANGELOG.md`](CHANGELOG.md) - Summarizes released application changes by version.
+- [`CITATION.cff`](CITATION.cff) - Provides machine-readable project citation metadata.
 - [`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md) - Defines expected community behavior and confidential reporting procedures.
 - [`CONTRIBUTING.md`](CONTRIBUTING.md) - Explains development expectations and contribution licensing.
 - [`DOCUMENTATION-LICENSE.md`](DOCUMENTATION-LICENSE.md) - Applies CC BY-SA 4.0 to repository documentation.
 - [`Dockerfile`](Dockerfile) - Builds the deployable MELvan application image.
 - [`Dockerfile.test`](Dockerfile.test) - Builds the PostgreSQL and Azurite integration-test image.
-- [`LICENSE`](LICENSE) - Applies AGPL-3.0-or-later to MELvan software.
+- [`LICENSE.md`](LICENSE.md) - Applies the MIT License to MELvan software.
+- [`NOTICE.md`](NOTICE.md) - Records MELVan project attribution and citation guidance.
 - [`README.md`](README.md) - Introduces MELvan, its support boundary, setup, tests, and documentation.
 - [`SECURITY.md`](SECURITY.md) - Defines supported versions and private vulnerability reporting.
 - [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md) - Identifies bundled third-party software and its licensing.

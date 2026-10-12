@@ -3,6 +3,27 @@
 This changelog begins with the first reviewed public-release candidate. Private
 development chronology and acceptance records are intentionally excluded.
 
+## 1.2.0 - 2026-09-17
+
+- Added a shared, read-only **About MELvan** tab for Owner, Administrator,
+  Reporter, and Reviewer sessions.
+- Added the complete MELvan FAQ, including attribution, methodology, quality
+  measures, suitability guidance, access options, and open resources.
+- Kept the feature informational and made the expanded navigation usable on
+  narrow screens without changing role permissions or program workflows.
+
+## 1.1.1 - 2026-09-15
+
+- Clarified that Administrator metrics count scoring events, including separate
+  Logic Model update reviews of existing Evidence.
+- Broke the total into initial Statement reviews and Logic Model update reviews,
+  and displayed the current Evidence-record count for reconciliation with PDF
+  exports.
+- Preserved lifetime-score calculations and one-row-per-current-Evidence export
+  behavior.
+- Replaced the AGPL software license with the MIT License and added project
+  attribution and machine-readable citation metadata.
+
 ## 1.1.0 - 2026-09-15
 
 - Added an Administrator-only **MELvan metrics** tab beside **Users**.

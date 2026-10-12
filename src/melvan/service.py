@@ -3375,9 +3375,17 @@ class MelvanService:
                 WHERE workspace_id = melvan_workspace_id() AND status = 'completed'
                 """
             ).fetchone()[0]
+        review_cycles = {
+            "statement": sum(row["cycle_type"] == "statement" for row in rows),
+            "evidence_reassessment": sum(
+                row["cycle_type"] == "evidence_reassessment" for row in rows
+            ),
+        }
         return {
             "scoring_policy_version": SCORING_POLICY_VERSION,
             "scored_reviews": len(rows),
+            "review_cycles": review_cycles,
+            "current_evidence": len(self.evidence()),
             "completed_review_sessions": int(completed_sessions),
             "lifetime_scores": self._score_summary(rows),
         }

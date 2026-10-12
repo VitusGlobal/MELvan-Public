@@ -11,8 +11,8 @@ fail() {
   status=1
 }
 
-for required in README.md contents.md LICENSE DOCUMENTATION-LICENSE.md SECURITY.md \
-  CONTRIBUTING.md CODE_OF_CONDUCT.md \
+for required in README.md contents.md LICENSE.md NOTICE.md CITATION.cff \
+  DOCUMENTATION-LICENSE.md SECURITY.md CONTRIBUTING.md CODE_OF_CONDUCT.md \
   THIRD_PARTY_NOTICES.md ASSET-LICENSES.md docs/architecture.md \
   docs/configuration.md docs/azure-deployment.md \
   docs/testing.md docs/security-and-privacy.md docs/principles.md \
@@ -22,14 +22,21 @@ for required in README.md contents.md LICENSE DOCUMENTATION-LICENSE.md SECURITY.
   [[ -f "$required" ]] || fail "missing $required"
 done
 
-[[ -f LICENSE || -f LICENSE.md || -f LICENSE.txt ]] || \
+[[ -f LICENSE.md ]] || \
   fail "no software license has been selected"
 
-if rg -n -i \
+publication_matches=$(rg -n -i \
   --glob '!scripts/check-publication.sh' \
+  --glob '!NOTICE.md' \
+  --glob '!CITATION.cff' \
   --glob '!src/melvan/static/vendor/**' \
   --glob '!.venv*/**' \
-  '(sprint[- _]?[0-9]|development notes|acceptance transcript|MartinMBCN|Martin Mills|rg-melvan-demo-canadacentral|melvan\.vitus\.global|/Users/martin)' .; then
+  '(sprint[- _]?[0-9]|development notes|acceptance transcript|MartinMBCN|Martin Mills|rg-melvan-demo-canadacentral|melvan\.vitus\.global|/Users/martin)' . || true)
+publication_matches=$(printf '%s\n' "$publication_matches" \
+  | grep -vF 'Open-source AI product architecture:</strong> Martin Mills (3den Systems)' \
+  | grep -vF 'Demo — <a href="http://melvan.vitus.global"' || true)
+if [[ -n "$publication_matches" ]]; then
+  printf '%s\n' "$publication_matches"
   fail "internal chronology, identity, path, or deployment value remains"
 fi
 

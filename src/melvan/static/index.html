@@ -205,6 +205,10 @@
           <i data-lucide="chart-no-axes-combined" aria-hidden="true"></i>
           <span>MELvan metrics</span>
         </button>
+        <button class="tab" type="button" role="tab" aria-selected="false" data-view="about-melvan">
+          <i data-lucide="info" aria-hidden="true"></i>
+          <span>About MELvan</span>
+        </button>
       </nav>
     </header>
 
@@ -436,6 +440,119 @@
           </div>
           <div id="administrator-metrics" aria-live="polite"></div>
         </section>
+      </section>
+
+      <section class="view" id="view-about-melvan" role="tabpanel" hidden>
+        <div class="view-heading about-heading">
+          <div>
+            <p class="eyebrow">About MELvan</p>
+            <h1>Frequently Asked Questions</h1>
+            <p>An AI-assisted approach to capturing program impact</p>
+          </div>
+        </div>
+        <div class="about-content">
+          <section>
+            <h2>Who developed MELvan?</h2>
+            <p>MELVan was developed collaboratively by the Precision Child and Youth Mental Health (PCYMH) Collaboratory at Children's Hospital of Eastern Ontario (CHEO) Research Institute and Vitus Consulting.</p>
+            <h3>Project team:</h3>
+            <ul>
+              <li>Christina Honeywell (CHEO RI)</li>
+              <li>Kathleen Pajer, (CHEO RI)</li>
+              <li>Roxana Salehi (Vitus Consulting)</li>
+            </ul>
+            <p><strong>Open-source AI product architecture:</strong> Martin Mills (3den Systems)</p>
+            <p>For information on how to cite MELVan, see <a href="https://github.com/VitusGlobal/MELvan-Public/blob/main/CITATION.cff" target="_blank" rel="noopener noreferrer">CITATION.cff</a>. MELVan is licensed under the MIT License. See <a href="https://github.com/VitusGlobal/MELvan-Public/blob/main/LICENSE.md" target="_blank" rel="noopener noreferrer">LICENSE</a>.</p>
+          </section>
+
+          <section>
+            <h2>What does MELvan stand for?</h2>
+            <p>MELvan is a wordplay on Monitoring, Evaluation, and Learning.</p>
+          </section>
+
+          <section>
+            <h2>What is MELvan?</h2>
+            <p>MELvan is an AI tool that helps program leaders capture evaluation-relevant moments as they happen — a short note, a photo, a quick observation during a meeting or in the field. MELvan then classifies each entry against a program's Results-Based Management (RBM) structure called logic model (output, outcome, ultimate goal), assigns a confidence score, and produces a short rationale.</p>
+            <p>Read the <a href="https://github.com/VitusGlobal/MELvan-Public/blob/main/docs/product-guide.md" target="_blank" rel="noopener noreferrer">product guide in our Github repository</a> for a high-level summary of the system and roles.</p>
+          </section>
+
+          <section>
+            <h2>Why was MELvan made?</h2>
+            <p>Unintended and emergent program outcomes are crucial for accountability and learning, but they're easily lost without the right tools and processes. Program leaders often notice an evaluation-relevant moment as it happens — an unintended result mentioned in a meeting, an aside in an informal conversation — but don't have time to reflect on it or document it on the spot. The moment passes, and usually so does the memory of the emergent or unintended outcome by the time an evaluator asks about it.</p>
+          </section>
+
+          <section>
+            <h2>How is MELvan integrated into everyday work of leaders?</h2>
+            <p>A leader captures a short note or photo during a meeting or daily work. MELvan classifies the entry and logs it with a confidence score and rationale. At an agreed upon cadence (e.g.: quarterly), program leadership and an external evaluation consultant review the log together, confirm or correct MELvan's classification, and feed accepted entries into the program's monitoring, learning, and evaluation work.</p>
+          </section>
+
+          <section>
+            <h2>How does MELvan change the way evaluation data gets collected?</h2>
+            <p>Traditional data collection is essential but periodic. MELvan adds a complementary layer: continuous, leader-driven capture that surfaces emergent or unintended outcomes as they unfold, rather than waiting for the next scheduled evaluation exercise. It's designed to lower the effort required to capture and classify evaluation-relevant information in daily leadership workflows, while deferring deeper interpretation to dedicated review sessions.</p>
+          </section>
+
+          <section>
+            <h2>What is the methodology behind MELvan?</h2>
+            <p>MELvan's knowledge base combines open-source evaluation literature with program-specific information. MELvan uses a combination of deterministic (rules-based) and non-deterministic (AI) approaches to classify reported statements against the logic model. It provides a confidence score for each classification, as well as a rationale. Classification, mapping, and their rationales are fully automated processes; the review session is where an evaluation team makes the interpretive call as to their quality. During the review, MELvan's outputs are assessed by the reviewers and accepted, modified, or rejected, and that feedback becomes an input to MELvan's learning mechanism to improve its classification model, meaning that over time it should become progressively more accurate.</p>
+          </section>
+
+          <section>
+            <h2>Who does what in MELvan?</h2>
+            <p><strong>A Reporter</strong> submits an entry — text, a voice recording, or a photo — and can add extra context up until it's reviewed.</p>
+            <p><strong>MELvan</strong> summarizes the entry, classifies it as an Activity, Output, or Outcome, and proposes one or more mappings to the program's Logic Model, each with its own confidence score and rationale.</p>
+            <p><strong>A Reviewer</strong> accepts a correct mapping, corrects it, or makes a correction right in the tool itself — nothing becomes Evidence until a Reviewer has approved at least one mapping.</p>
+            <p><strong>An Administrator</strong> manages the program's Reporter and Reviewer accounts and its Logic Model (e.g. add a new version).</p>
+            <p><strong>An Owner</strong> creates Administrators and can suspend accounts. Owners have read-only visibility into the workspaces (e.g. logic model or other source documents).</p>
+          </section>
+
+          <section>
+            <h2>How is MELvan evaluated as a tool?</h2>
+            <p>MELvan is assessed against five quality measures:</p>
+            <dl>
+              <dt>First-review approval:</dt>
+              <dd>whether the Reviewer's first action accepts the Statement and MELvan's associated decisions without a substantive correction. This is the primary outcome MELvan is intended to improve.</dd>
+              <dt>Correct level:</dt>
+              <dd>whether MELvan correctly distinguishes Activity, Output, or Outcome.</dd>
+              <dt>Correct Outcome direction:</dt>
+              <dd>whether an Outcome is correctly identified as Positive or Negative.</dd>
+              <dt>Correct mapping:</dt>
+              <dd>whether MELvan identifies the correct existing Logic Model element or elements, or correctly determines that there is no suitable existing match. An undisputed mapping or no-match decision that the reviewer accepted is considered correct.</dd>
+              <dt>No hallucination/toxic content:</dt>
+              <dd>whether the summary, rationale, criteria, terminology, tone, and other language are accurate, supported, appropriate, and free from invented details or overstated claims.</dd>
+            </dl>
+          </section>
+
+          <section>
+            <h2>What kind of values are behind MELvan?</h2>
+            <p><strong>Traceability:</strong> every log entry carries a rationale, so the reasoning behind a classification or mapping is visible, not a black box.</p>
+            <p><strong>Open science:</strong> the source code and supporting resources are publicly available</p>
+            <p><strong>Resource-conscious design:</strong> constrained AI requests, transient voice processing, image normalization, temporary-file cleanup, bounded logging, and configurable infrastructure capacity all limit unnecessary computation and data retention. Environmental impact, however, isn't currently measured as we are still thinking through the best way to do this.</p>
+          </section>
+
+          <section>
+            <h2>Is MELvan suitable for my program?</h2>
+            <p>Most programs will benefit from being able to quickly capture program results on the go. However, for MELvan to be useful for your specific program, and for it to provide accurate classification tailored to your needs, you need to give it your specific program logic model. Therefore, you need a program logic model as a pre-condition to use MELvan.</p>
+            <p><strong>If your program logic model isn't built yet:</strong> that's your starting point.</p>
+            <p><strong>If you already have a logic model:</strong> contact Roxana Salehi (*<a href="mailto:roxana@vitus.ca">roxana@vitus.ca</a>)* to request access to the demo version in order to assess MELvan's suitability for your purposes. Access is typically given for 2-4 weeks.</p>
+            <p>Newly created administrator accounts can configure the logic model for their workspace — they have the choice to either clone the 'demo' logic model, a generic logic model for an imaginary mental health program for adults, or they can create their own logic model which must comply with the required structure.</p>
+          </section>
+
+          <section>
+            <h2>How can I get a version of MELvan for my program?</h2>
+            <p>If you want to use MELvan on an ongoing basis, then we recommend you discuss its use with your organization and ensure it complies with any existing responsible AI frameworks in your organization.</p>
+            <p>If your technology team is able to support installation of cloud-based applications for Azure (currently, Azure is the only supported Cloud provider), you are invited to fork our open access GitHub to install your own version on your own Azure instance.</p>
+            <p>Otherwise, contact Vitus Consulting if (a) you require professional services to install MELvan on your own infrastructure, or (b) if your organization has determined that it can use a third-party (i.e. Vitus's own) version of MELvan. Consulting and/or subscription fees will apply.</p>
+          </section>
+
+          <section>
+            <h2>Are there any free open access resources about MELvan?</h2>
+            <p>Yes.</p>
+            <ul class="about-resources">
+              <li>The open-access case study: Salehi, R., Honeywell, C., &amp; Pajer, K. (2026). <em>MELvan: An AI-Assisted Approach to Capturing Program Impact.</em> Zenodo. <a href="https://doi.org/10.5281/zenodo.18902209" target="_blank" rel="noopener noreferrer">https://doi.org/10.5281/zenodo.18902209</a>.</li>
+              <li>MELvan's underlying evaluation methodology, RECAP: <a href="https://doi.org/10.5281/zenodo.18456041" target="_blank" rel="noopener noreferrer">https://doi.org/10.5281/zenodo.18456041</a>.</li>
+              <li>Demo — <a href="http://melvan.vitus.global" target="_blank" rel="noopener noreferrer">http://melvan.vitus.global</a></li>
+            </ul>
+          </section>
+        </div>
       </section>
     </main>
 

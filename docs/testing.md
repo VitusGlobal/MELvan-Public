@@ -43,6 +43,14 @@ Browser acceptance must verify visible labels, role-specific navigation,
 responsive layout, voice and photo states, review actions, and PDF visibility.
 Backend tests alone do not close interface requirements.
 
+## Continuous integration
+
+The default GitHub Actions test workflow runs repository-local publication,
+unit, PostgreSQL, and Azurite checks. It does not require or contact a live
+Azure deployment. The separate Azure deployment workflow is manual-only and
+runs only when a repository operator explicitly starts it after configuring
+that fork's Azure variables and identity.
+
 ## Hosted verification
 
 Use synthetic data in a separately owned Azure environment. For the production

@@ -25,13 +25,25 @@ done
 [[ -f LICENSE.md ]] || \
   fail "no software license has been selected"
 
-publication_matches=$(rg -n -i \
-  --glob '!scripts/check-publication.sh' \
-  --glob '!NOTICE.md' \
-  --glob '!CITATION.cff' \
-  --glob '!src/melvan/static/vendor/**' \
-  --glob '!.venv*/**' \
-  '(sprint[- _]?[0-9]|development notes|acceptance transcript|MartinMBCN|Martin Mills|rg-melvan-demo-canadacentral|melvan\.vitus\.global|/Users/martin)' . || true)
+publication_pattern='(sprint[- _]?[0-9]|development notes|acceptance transcript|MartinMBCN|Martin Mills|rg-melvan-demo-canadacentral|melvan\.vitus\.global|/Users/martin)'
+if command -v rg >/dev/null 2>&1; then
+  publication_matches=$(rg -n -i \
+    --glob '!scripts/check-publication.sh' \
+    --glob '!NOTICE.md' \
+    --glob '!CITATION.cff' \
+    --glob '!src/melvan/static/vendor/**' \
+    --glob '!.venv*/**' \
+    "$publication_pattern" . || true)
+else
+  publication_matches=$(grep -RInE \
+    --exclude='check-publication.sh' \
+    --exclude='NOTICE.md' \
+    --exclude='CITATION.cff' \
+    --exclude-dir='.git' \
+    --exclude-dir='.venv*' \
+    --exclude-dir='vendor' \
+    "$publication_pattern" . || true)
+fi
 publication_matches=$(printf '%s\n' "$publication_matches" \
   | grep -vF 'Open-source AI product architecture:</strong> Martin Mills (3den Systems)' \
   | grep -vF 'Demo — <a href="http://melvan.vitus.global"' || true)
@@ -52,7 +64,7 @@ if find docs -type f \( -name '*.pdf' -o -name '*.pptx' -o -name '*.docx' \) \
   fail "unreviewed binary documentation is present"
 fi
 
-if rg -n 'PENDING' ASSET-LICENSES.md SECURITY.md CODE_OF_CONDUCT.md; then
+if grep -nH 'PENDING' ASSET-LICENSES.md SECURITY.md CODE_OF_CONDUCT.md; then
   fail "publication governance or asset rights remain unresolved"
 fi
 
@@ -62,8 +74,13 @@ for canonical in \
   'tired-of-vague-advice-on-writing-a-theory-of-change-narrative-try-the-recap-framework/' \
   'Performance Measurement Framework' \
   'default-deny'; do
-  rg -q -F "$canonical" docs README.md src/melvan/static/app.js || \
-    fail "canonical product contract is missing: $canonical"
+  if command -v rg >/dev/null 2>&1; then
+    rg -q -F "$canonical" docs README.md src/melvan/static/app.js || \
+      fail "canonical product contract is missing: $canonical"
+  else
+    grep -RqsF "$canonical" docs README.md src/melvan/static/app.js || \
+      fail "canonical product contract is missing: $canonical"
+  fi
 done
 
 "${PYTHON:-python3}" scripts/check_docs.py || \

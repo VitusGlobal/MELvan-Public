@@ -3,6 +3,14 @@
 This changelog begins with the first reviewed public-release candidate. Private
 development chronology and acceptance records are intentionally excluded.
 
+## 1.2.1 - 2026-10-12
+
+- Made the publication gate portable to GitHub-hosted runners that do not
+  include `ripgrep`, while retaining `ripgrep` as the faster local path when
+  available.
+- Clarified that default CI is repository-local and requires no Azure account;
+  Azure deployment remains a separate manual-only workflow.
+
 ## 1.2.0 - 2026-09-17
 
 - Added a shared, read-only **About MELvan** tab for Owner, Administrator,

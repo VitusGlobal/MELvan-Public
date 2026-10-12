@@ -6,6 +6,15 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class AzureDeploymentContractTests(unittest.TestCase):
+    def test_publication_gate_allows_intentional_attribution_without_ripgrep(self) -> None:
+        script = (ROOT / "scripts/check-publication.sh").read_text()
+
+        self.assertIn("if command -v rg", script)
+        self.assertIn("--glob '!LICENSE.md'", script)
+        self.assertIn("--exclude='LICENSE.md'", script)
+        self.assertIn("--glob '!NOTICE.md'", script)
+        self.assertIn("--exclude='NOTICE.md'", script)
+
     def test_production_image_contains_database_migrations(self) -> None:
         dockerfile = (ROOT / "Dockerfile").read_text(encoding="utf-8")
 

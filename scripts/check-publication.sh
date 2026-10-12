@@ -29,6 +29,7 @@ publication_pattern='(sprint[- _]?[0-9]|development notes|acceptance transcript|
 if command -v rg >/dev/null 2>&1; then
   publication_matches=$(rg -n -i \
     --glob '!scripts/check-publication.sh' \
+    --glob '!LICENSE.md' \
     --glob '!NOTICE.md' \
     --glob '!CITATION.cff' \
     --glob '!src/melvan/static/vendor/**' \
@@ -37,6 +38,7 @@ if command -v rg >/dev/null 2>&1; then
 else
   publication_matches=$(grep -RInE \
     --exclude='check-publication.sh' \
+    --exclude='LICENSE.md' \
     --exclude='NOTICE.md' \
     --exclude='CITATION.cff' \
     --exclude-dir='.git' \

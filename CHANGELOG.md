@@ -3,6 +3,14 @@
 This changelog begins with the first reviewed public-release candidate. Private
 development chronology and acceptance records are intentionally excluded.
 
+## 1.2.2 - 2026-10-12
+
+- Allowed intentional copyright-holder attribution in `LICENSE.md` without
+  weakening publication scans across application, deployment, and product
+  documentation files.
+- Added regression coverage for license and notice attribution exclusions in
+  both the `ripgrep` and standard `grep` publication-check paths.
+
 ## 1.2.1 - 2026-10-12
 
 - Made the publication gate portable to GitHub-hosted runners that do not

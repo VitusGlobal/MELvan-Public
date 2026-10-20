@@ -94,6 +94,11 @@ class ModelValidationTestCase(unittest.TestCase):
         self.assertIn("at least 0.25", instructions)
         self.assertIn("0.50 or more are supported", instructions)
         self.assertIn("no more than three tentative", instructions)
+        self.assertIn("set outcome_category to null", instructions)
+        self.assertIn("outcome_change_types to an empty array", instructions)
+        self.assertIn("An Activity is work that is planned", instructions)
+        self.assertIn("are not Outcomes unless", instructions)
+        self.assertIn("a change has actually occurred", instructions)
 
     def test_foundry_connectivity_check_completes_real_model_request(self) -> None:
         calls = []
@@ -227,6 +232,27 @@ class ModelValidationTestCase(unittest.TestCase):
         )
         result = validate_result(payload, ELEMENTS, "gpt-5-mini")
         self.assertIsNone(result.result_direction)
+
+    def test_non_outcomes_discard_surplus_outcome_details(self) -> None:
+        for classification in ("Activity", "Output", "Indicator"):
+            with self.subTest(classification=classification):
+                payload = valid_payload()
+                payload.update(
+                    {
+                        "classification": classification,
+                        "outcome_category": "B",
+                        "outcome_change_types": ["Collaboration"],
+                        "match_status": "no_suitable_match",
+                        "mapping_decisions": [],
+                        "no_match_rationale": "No suitable existing match.",
+                    }
+                )
+
+                result = validate_result(payload, ELEMENTS, "gpt-5-mini")
+
+                self.assertIsNone(result.result_direction)
+                self.assertIsNone(result.outcome_category)
+                self.assertEqual([], result.outcome_change_types)
 
     def test_result_direction_schema_is_never_nullable(self) -> None:
         schema = OpenAIModelAdapter._schema()

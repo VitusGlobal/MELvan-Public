@@ -46,7 +46,7 @@ OUTCOME_CHANGE_TYPES = {
 ALL_OUTCOME_CHANGE_TYPES = sorted(
     {change_type for values in OUTCOME_CHANGE_TYPES.values() for change_type in values}
 )
-PROMPT_VERSION = "statement-analysis-v3"
+PROMPT_VERSION = "statement-analysis-v4"
 
 
 class ModelError(RuntimeError):
@@ -668,6 +668,13 @@ class OpenAIModelAdapter(ModelAdapter):
         return (
             "You are MELvan, a purpose-bound Results-Based Management classifier. "
             "Classify the Statement as Activity, Output, Outcome, or Indicator. "
+            "An Activity is work that is planned, underway, or performed. An Output is a "
+            "completed product, service, or deliverable directly produced by program work. "
+            "An Outcome is an observed change in state, condition, behaviour, practice, use, "
+            "capacity, knowledge, or a related result. An Indicator is a measure used to track "
+            "an Output or Outcome. Intentions, efforts, requests, plans, and scheduled work, "
+            "including language such as seeking to do something, are not Outcomes unless the "
+            "Statement also reports that a change has actually occurred. "
             "Always set result_direction to Positive or Negative for an Outcome. The transport "
             "requires a value, but MELvan ignores it for Activity, Output, and Indicator. "
             "Positive means the reported result supports the intended program direction; "
@@ -679,6 +686,8 @@ class OpenAIModelAdapter(ModelAdapter):
             "B: Behaviour, Practice, Use, Adoption, Collaboration, Integration, Performance; "
             "C: Capacity, Knowledge, Skill, Confidence, Attitude, Motivation, Readiness, "
             "Resources, Ability. A change type must belong to the selected category. "
+            "For Activity, Output, or Indicator, set outcome_category to null and "
+            "outcome_change_types to an empty array. "
             "Search the supplied existing "
             "Outputs and Outcomes first using semantic and causal fit. Use one or more existing "
             "IDs whenever defensible. For every selected element, return an independent confidence "
@@ -1079,8 +1088,11 @@ def validate_result(
             raise ModelError("An Outcome must include a valid category and change type.")
         if any(value not in OUTCOME_CHANGE_TYPES[category] for value in change_types):
             raise ModelError("The model returned an invalid Outcome change type.")
-    elif category is not None or change_types:
-        raise ModelError("Non-Outcomes cannot include Outcome category details.")
+    else:
+        # These fields are required by the structured transport schema. Discard
+        # harmless Outcome-only metadata when the classification makes it inapplicable.
+        category = None
+        change_types = []
 
     status = payload.get("match_status")
     raw_decisions = payload.get("mapping_decisions") or []

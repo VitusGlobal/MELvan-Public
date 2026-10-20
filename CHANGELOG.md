@@ -3,6 +3,14 @@
 This changelog begins with the first reviewed public-release candidate. Private
 development chronology and acceptance records are intentionally excluded.
 
+## 1.2.4 - 2026-10-20
+
+- Prevented harmless Outcome-only metadata returned with an Activity, Output,
+  or Indicator classification from causing Statement analysis to fail.
+- Preserved strict Outcome validation while explicitly constraining non-Outcome
+  responses and advancing the audited Statement-analysis prompt contract.
+- Added regression coverage for the contradictory provider response.
+
 ## 1.2.3 - 2026-10-12
 
 - Corrected migration connection selection so Alembic uses the explicitly

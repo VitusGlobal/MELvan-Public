@@ -438,6 +438,36 @@ class LearningMemory:
                 final=final["result_direction"],
                 confidence=float(source["classification_confidence"]),
             )
+            self._add_comparison_example(
+                connection,
+                event_id=event_id,
+                statement_id=statement_id,
+                source_analysis_id=source_analysis_id,
+                resulting_analysis_id=resulting_analysis_id,
+                reviewer_id=reviewer_id,
+                source_text=statement["original_text"],
+                logic_model_id=final["logic_model_id"],
+                dimension="outcome_category",
+                example_key="outcome_category",
+                original=source["outcome_category"],
+                final=final["outcome_category"],
+                confidence=float(source["classification_confidence"]),
+            )
+            self._add_comparison_example(
+                connection,
+                event_id=event_id,
+                statement_id=statement_id,
+                source_analysis_id=source_analysis_id,
+                resulting_analysis_id=resulting_analysis_id,
+                reviewer_id=reviewer_id,
+                source_text=statement["original_text"],
+                logic_model_id=final["logic_model_id"],
+                dimension="outcome_change_types",
+                example_key="outcome_change_types",
+                original=json.loads(source["outcome_change_types"] or "[]"),
+                final=json.loads(final["outcome_change_types"] or "[]"),
+                confidence=float(source["classification_confidence"]),
+            )
         source_mappings = self._mappings(connection, source_analysis_id)
         final_mappings = self._mappings(connection, final["id"])
         all_stable_ids = sorted(set(source_mappings) | set(final_mappings))

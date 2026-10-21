@@ -479,6 +479,42 @@ class HTTPTestCase(unittest.TestCase):
         _, evidence = self.request("/api/evidence", token=self.reviewer_token)
         self.assertEqual([statement["id"]], [item["id"] for item in evidence["evidence"]])
 
+    def test_feedback_route_requires_readable_outcome_metadata(self) -> None:
+        _, created = self.request(
+            "/api/statements", {"text": "We held a planning meeting."}
+        )
+        statement = created["statement"]
+        self.assertEqual("Activity", statement["analysis"]["classification"])
+
+        status, rejected = self.request(
+            f"/api/statements/{statement['id']}/feedback",
+            {
+                "analysis_id": statement["analysis"]["id"],
+                "corrected_classification": "Outcome",
+                "mapping_ids": ["MO4"],
+            },
+            self.reviewer_token,
+        )
+        self.assertEqual(400, status)
+        self.assertEqual("Choose an Outcome direction.", rejected["error"])
+
+        status, changed = self.request(
+            f"/api/statements/{statement['id']}/feedback",
+            {
+                "analysis_id": statement["analysis"]["id"],
+                "corrected_classification": "Outcome",
+                "corrected_result_direction": "Positive",
+                "corrected_outcome_category": "B",
+                "corrected_outcome_change_types": ["Collaboration"],
+                "mapping_ids": ["MO4"],
+            },
+            self.reviewer_token,
+        )
+        self.assertEqual(200, status)
+        self.assertEqual("evidence", changed["statement"]["status"])
+        self.assertEqual("B", changed["statement"]["analysis"]["outcome_category"])
+
+
     def test_reviewer_session_report_and_not_relevant_routes(self) -> None:
         _, first = self.request(
             "/api/statements", {"text": "A planning meeting was held."}

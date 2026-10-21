@@ -69,7 +69,17 @@ class LearningMemoryTestCase(unittest.TestCase):
                 "SELECT * FROM language_feedback WHERE statement_id = ?",
                 (statement["id"],),
             ).fetchone()
-        self.assertEqual({"classification", "direction", "mapping", "language"}, {row["dimension"] for row in rows})
+        self.assertEqual(
+            {
+                "classification",
+                "direction",
+                "outcome_category",
+                "outcome_change_types",
+                "mapping",
+                "language",
+            },
+            {row["dimension"] for row in rows},
+        )
         self.assertTrue(all(row["truth_weight"] == 1.0 for row in rows))
         mapping = next(row for row in rows if row["dimension"] == "mapping")
         self.assertEqual(0.9, mapping["original_confidence"])

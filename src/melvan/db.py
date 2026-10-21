@@ -321,6 +321,8 @@ CREATE TABLE IF NOT EXISTS review_feedback (
     analysis_id TEXT NOT NULL,
     corrected_classification TEXT,
     corrected_result_direction TEXT CHECK (corrected_result_direction IN ('Positive', 'Negative')),
+    corrected_outcome_category TEXT CHECK (corrected_outcome_category IN ('A', 'B', 'C')),
+    corrected_outcome_change_types TEXT NOT NULL DEFAULT '[]',
     comments TEXT,
     language_issue_types TEXT NOT NULL DEFAULT '[]',
     mapping_ids TEXT NOT NULL DEFAULT '[]',
@@ -1126,6 +1128,16 @@ class Database:
             connection.execute(
                 "ALTER TABLE review_feedback ADD COLUMN corrected_result_direction TEXT "
                 "CHECK (corrected_result_direction IN ('Positive', 'Negative'))"
+            )
+        if "corrected_outcome_category" not in feedback_columns:
+            connection.execute(
+                "ALTER TABLE review_feedback ADD COLUMN corrected_outcome_category TEXT "
+                "CHECK (corrected_outcome_category IN ('A', 'B', 'C'))"
+            )
+        if "corrected_outcome_change_types" not in feedback_columns:
+            connection.execute(
+                "ALTER TABLE review_feedback "
+                "ADD COLUMN corrected_outcome_change_types TEXT NOT NULL DEFAULT '[]'"
             )
         if "reviewer_id" not in feedback_columns:
             connection.execute("ALTER TABLE review_feedback ADD COLUMN reviewer_id TEXT")

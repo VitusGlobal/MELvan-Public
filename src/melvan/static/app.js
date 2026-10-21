@@ -41,6 +41,16 @@ const RECAP_FIELDS = {
   assumptions: { label: "Assumptions", prompt: "What needs to be true for this to work?" },
   people: { label: "People", prompt: "Who is influencing and influenced by this?" },
 };
+const OUTCOME_CHANGE_TYPES = {
+  A: ["State", "Condition", "Wellbeing", "System performance", "Health result"],
+  B: ["Behaviour", "Practice", "Use", "Adoption", "Collaboration", "Integration", "Performance"],
+  C: ["Capacity", "Knowledge", "Skill", "Confidence", "Attitude", "Motivation", "Readiness", "Resources", "Ability"],
+};
+const OUTCOME_CATEGORY_LABELS = {
+  A: "State, condition, wellbeing, system performance, or health result",
+  B: "Behaviour, practice, use, adoption, collaboration, integration, or performance",
+  C: "Capacity, knowledge, skill, confidence, attitude, motivation, readiness, resources, or ability",
+};
 let loginPending = false;
 let logicAutosaveTimer = null;
 let voiceStream = null;
@@ -1521,6 +1531,28 @@ function directionChoices(selected, visible) {
   </div></fieldset>`;
 }
 
+function outcomeDetailChoices(category, selectedTypes, visible) {
+  const selected = new Set(selectedTypes || []);
+  return `
+    <fieldset class="choice-field field-full" data-outcome-category-field ${visible ? "" : "hidden"}>
+      <legend class="field-label">Outcome category</legend>
+      <div class="classification-choices">${Object.entries(OUTCOME_CATEGORY_LABELS).map(([value, label]) => `
+        <label class="option-choice">
+          <input class="option-input option-radio" type="radio" name="outcome_category" value="${value}" ${value === category ? "checked" : ""} ${visible ? "required" : "disabled"} />
+          <span class="option-mark" aria-hidden="true"></span><span>${escapeHtml(label)}</span>
+        </label>`).join("")}</div>
+    </fieldset>
+    <fieldset class="choice-field field-full" data-outcome-change-types-field ${visible ? "" : "hidden"}>
+      <legend class="field-label">Outcome change type</legend>
+      <div class="mapping-choices">${Object.entries(OUTCOME_CHANGE_TYPES).map(([categoryValue, values]) => values.map((value) => `
+        <label class="option-choice" data-change-type-category="${categoryValue}" ${categoryValue === category ? "" : "hidden"}>
+          <input class="option-input option-checkbox" type="checkbox" name="outcome_change_types" value="${escapeHtml(value)}" ${selected.has(value) ? "checked" : ""} ${visible && categoryValue === category ? "" : "disabled"} />
+          <span class="option-mark" aria-hidden="true"></span><span>${escapeHtml(value)}</span>
+        </label>`).join("")).join("")}</div>
+      <p class="field-help">Select every change type that applies.</p>
+    </fieldset>`;
+}
+
 function mappingChoices(elements, selectedIds, label, proposedMappings = []) {
   const selected = new Set(selectedIds);
   const proposedById = new Map(proposedMappings.map((mapping) => [mapping.id, mapping]));
@@ -1555,7 +1587,11 @@ function feedbackPanel(statement) {
     return `
       <form class="feedback-panel" data-feedback-form data-no-suitable-match hidden>
         <div class="feedback-heading"><h2>Change MELvan's classification</h2><button class="icon-button" type="button" data-action="close-feedback" aria-label="Close changes" title="Close"><i data-lucide="x" aria-hidden="true"></i></button></div>
-        <div class="feedback-grid">${classificationChoices(analysis.classification)}</div>
+        <div class="feedback-grid">
+          ${classificationChoices(analysis.classification)}
+          ${directionChoices(analysis.result_direction, analysis.classification === "Outcome")}
+          ${outcomeDetailChoices(analysis.outcome_category, analysis.outcome_change_types, analysis.classification === "Outcome")}
+        </div>
         <div class="feedback-footer"><button class="button button-primary" type="submit"><i data-lucide="save" aria-hidden="true"></i><span>Apply classification change</span></button></div>
       </form>`;
   }
@@ -1569,6 +1605,7 @@ function feedbackPanel(statement) {
       <div class="feedback-grid">
         ${classificationChoices(analysis.classification)}
         ${directionChoices(analysis.result_direction, analysis.classification === "Outcome")}
+        ${outcomeDetailChoices(analysis.outcome_category, analysis.outcome_change_types, analysis.classification === "Outcome")}
         ${mappingChoices(state.elements, selectedMappings, "Existing mappings", statement.mappings)}
         ${reject}
         ${languageFeedbackChoices()}
@@ -2192,6 +2229,28 @@ function syncDirectionField(form, classification) {
   });
 }
 
+function syncOutcomeFields(form, classification) {
+  syncDirectionField(form, classification);
+  const isOutcome = classification === "Outcome";
+  const categoryField = $("[data-outcome-category-field]", form);
+  const changeTypesField = $("[data-outcome-change-types-field]", form);
+  if (!categoryField || !changeTypesField) return;
+  categoryField.hidden = !isOutcome;
+  changeTypesField.hidden = !isOutcome;
+  const category = checkedValue(form, "outcome_category");
+  $$("input[name='outcome_category']", categoryField).forEach((input) => {
+    input.disabled = !isOutcome;
+    input.required = isOutcome;
+  });
+  $$('[data-change-type-category]', changeTypesField).forEach((label) => {
+    const active = isOutcome && label.dataset.changeTypeCategory === category;
+    label.hidden = !active;
+    const input = $("input[name='outcome_change_types']", label);
+    input.disabled = !active;
+    if (!active && isOutcome) input.checked = false;
+  });
+}
+
 function selectedMappingIds(form) {
   return $$("input[name='mapping_ids']:checked", form).map((input) => input.value);
 }
@@ -2204,7 +2263,11 @@ function handleReviewChange(event) {
   const form = event.target.closest("form");
   if (!form) return;
   if (event.target.name === "classification") {
-    syncDirectionField(form, event.target.value);
+    syncOutcomeFields(form, event.target.value);
+    return;
+  }
+  if (event.target.name === "outcome_category") {
+    syncOutcomeFields(form, checkedValue(form, "classification"));
     return;
   }
 }
@@ -2216,9 +2279,23 @@ async function handleFeedbackSubmit(event) {
   const statement = state.review.find((item) => item.id === form.closest(".record-card").dataset.statementId);
   const classification = checkedValue(form, "classification");
   const direction = checkedValue(form, "result_direction");
+  const outcomeCategory = checkedValue(form, "outcome_category");
+  const outcomeChangeTypes = $$("input[name='outcome_change_types']:checked", form).map((input) => input.value);
   const noSuitableMatch = form.hasAttribute("data-no-suitable-match");
   if (noSuitableMatch && classification === statement.analysis.classification) {
     showToast("Choose a different classification before applying the change.", true);
+    return;
+  }
+  if (classification === "Outcome" && !direction) {
+    showToast("Choose an Outcome direction.", true);
+    return;
+  }
+  if (classification === "Outcome" && !outcomeCategory) {
+    showToast("Choose an Outcome category.", true);
+    return;
+  }
+  if (classification === "Outcome" && outcomeChangeTypes.length === 0) {
+    showToast("Choose at least one Outcome change type.", true);
     return;
   }
   const body = {
@@ -2228,6 +2305,12 @@ async function handleFeedbackSubmit(event) {
     corrected_result_direction: classification === "Outcome"
       && direction !== (statement.analysis.result_direction || "")
       ? direction : null,
+    corrected_outcome_category: classification === "Outcome"
+      && outcomeCategory !== (statement.analysis.outcome_category || "")
+      ? outcomeCategory : null,
+    corrected_outcome_change_types: classification === "Outcome"
+      && !sameIds(outcomeChangeTypes, statement.analysis.outcome_change_types || [])
+      ? outcomeChangeTypes : null,
     comments: $("textarea[name='comments']", form)?.value.trim() || null,
     language_issue_types: $$('input[name="language_issue_types"]:checked', form).map((input) => input.value),
     reject_proposal: Boolean($("input[name='reject_proposal']", form)?.checked),

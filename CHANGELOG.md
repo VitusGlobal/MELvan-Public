@@ -3,6 +3,17 @@
 This changelog begins with the first reviewed public-release candidate. Private
 development chronology and acceptance records are intentionally excluded.
 
+## 1.2.5 - 2026-10-21
+
+- Added complete Reviewer controls for direction, category, and change types
+  when correcting a non-Outcome Statement to an Outcome.
+- Made the complete correction authoritative through atomic Evidence
+  acceptance and retained every Outcome attribute as future learning evidence.
+- Replaced fabricated Outcome defaults and unreadable failures with specific
+  validation for missing or category-incompatible metadata.
+- Added service, API, interface-contract, learning, SQLite, and PostgreSQL
+  migration coverage for the corrected workflow.
+
 ## 1.2.4 - 2026-10-20
 
 - Prevented harmless Outcome-only metadata returned with an Activity, Output,

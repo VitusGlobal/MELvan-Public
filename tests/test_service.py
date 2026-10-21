@@ -512,12 +512,20 @@ class ServiceTestCase(unittest.TestCase):
             {
                 "analysis_id": statement["analysis"]["id"],
                 "corrected_classification": "Outcome",
+                "corrected_result_direction": "Positive",
+                "corrected_outcome_category": "B",
+                "corrected_outcome_change_types": ["Practice", "Use"],
                 "mapping_ids": ["MO4", "LO5"],
                 "comments": "This reflects practice integration and improved clinical precision.",
             },
         )
         self.assertEqual(2, revised["analysis"]["version"])
         self.assertEqual("Outcome", revised["analysis"]["classification"])
+        self.assertEqual("Positive", revised["analysis"]["result_direction"])
+        self.assertEqual("B", revised["analysis"]["outcome_category"])
+        self.assertEqual(
+            ["Practice", "Use"], revised["analysis"]["outcome_change_types"]
+        )
         self.assertEqual(1.0, revised["analysis"]["classification_confidence"])
         self.assertEqual(["MO4", "LO5"], [mapping["id"] for mapping in revised["mappings"]])
         self.assertEqual([1.0, 1.0], [mapping["confidence"] for mapping in revised["mappings"]])
@@ -533,6 +541,83 @@ class ServiceTestCase(unittest.TestCase):
                 "SELECT COUNT(*) FROM analyses WHERE statement_id = ?", (statement["id"],)
             ).fetchone()[0]
         self.assertEqual(2, versions)
+
+    def test_reviewer_must_define_complete_outcome_metadata_when_changing_activity(self) -> None:
+        required = {
+            "corrected_result_direction": "Positive",
+            "corrected_outcome_category": "B",
+            "corrected_outcome_change_types": ["Collaboration"],
+        }
+        missing_expectations = {
+            "corrected_result_direction": "Choose an Outcome direction.",
+            "corrected_outcome_category": "Choose an Outcome category.",
+            "corrected_outcome_change_types": "Choose at least one Outcome change type.",
+        }
+        for missing, message in missing_expectations.items():
+            with self.subTest(missing=missing):
+                statement = self.service.create_statement("We held a planning meeting.")
+                self.assertEqual("Activity", statement["analysis"]["classification"])
+                payload = {
+                    "analysis_id": statement["analysis"]["id"],
+                    "corrected_classification": "Outcome",
+                    "mapping_ids": ["MO4"],
+                    **required,
+                }
+                payload.pop(missing)
+                with self.assertRaisesRegex(DomainError, message):
+                    self.service.submit_feedback(statement["id"], payload)
+
+        statement = self.service.create_statement("We held a planning meeting.")
+        revised = self.service.submit_feedback(
+            statement["id"],
+            {
+                "analysis_id": statement["analysis"]["id"],
+                "corrected_classification": "Outcome",
+                "mapping_ids": ["MO4"],
+                **required,
+            },
+            accept_as_evidence=True,
+        )
+        self.assertEqual("evidence", revised["status"])
+        self.assertEqual("Outcome", revised["analysis"]["classification"])
+        self.assertEqual("Positive", revised["analysis"]["result_direction"])
+        self.assertEqual("B", revised["analysis"]["outcome_category"])
+        self.assertEqual(
+            ["Collaboration"], revised["analysis"]["outcome_change_types"]
+        )
+        with self.database.connection() as connection:
+            learned = connection.execute(
+                "SELECT dimension, signal_type, final_value_json "
+                "FROM learning_examples WHERE statement_id = ?",
+                (statement["id"],),
+            ).fetchall()
+        learned_by_dimension = {row["dimension"]: row for row in learned}
+        self.assertEqual("corrected", learned_by_dimension["classification"]["signal_type"])
+        self.assertEqual(
+            "B", json.loads(learned_by_dimension["outcome_category"]["final_value_json"])
+        )
+        self.assertEqual(
+            ["Collaboration"],
+            json.loads(learned_by_dimension["outcome_change_types"]["final_value_json"]),
+        )
+
+    def test_reviewer_outcome_change_type_must_match_category(self) -> None:
+        statement = self.service.create_statement("We held a planning meeting.")
+        with self.assertRaisesRegex(
+            DomainError,
+            "Choose Outcome change types that belong to the selected category.",
+        ):
+            self.service.submit_feedback(
+                statement["id"],
+                {
+                    "analysis_id": statement["analysis"]["id"],
+                    "corrected_classification": "Outcome",
+                    "corrected_result_direction": "Positive",
+                    "corrected_outcome_category": "A",
+                    "corrected_outcome_change_types": ["Collaboration"],
+                    "mapping_ids": ["MO4"],
+                },
+            )
 
     def test_reviewer_change_can_atomically_accept_revised_statement_as_evidence(self) -> None:
         statement = self.service.create_statement(

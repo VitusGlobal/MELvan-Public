@@ -324,6 +324,15 @@ class RelationalBoundaryTestCase(unittest.TestCase):
         self.assertIn('"password_setup_purpose"', migration)
         self.assertIn("'initial_setup', 'recovery'", migration)
 
+    def test_reviewer_outcome_metadata_migration_is_present(self) -> None:
+        migration = (
+            Path(__file__).resolve().parents[1]
+            / "migrations/versions/0004_reviewer_outcome_metadata.py"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn('"corrected_outcome_category"', migration)
+        self.assertIn('"corrected_outcome_change_types"', migration)
+
 
 @unittest.skipUnless(
     os.getenv("MELVAN_TEST_POSTGRES_URL")

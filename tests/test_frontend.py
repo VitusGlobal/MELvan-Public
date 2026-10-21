@@ -409,6 +409,8 @@ class FrontendContractTestCase(unittest.TestCase):
         for control in (
             'name="classification"',
             'name="result_direction"',
+            'name="outcome_category"',
+            'name="outcome_change_types"',
             'name="mapping_ids"',
             'name="reject_proposal"',
             'name="comments"',
@@ -418,7 +420,9 @@ class FrontendContractTestCase(unittest.TestCase):
         self.assertIn('class="option-input option-radio" type="radio"', JAVASCRIPT)
         self.assertIn('class="option-input option-checkbox" type="checkbox"', JAVASCRIPT)
         self.assertIn('class="direction-toggle"', JAVASCRIPT)
-        self.assertIn("input.required = isOutcome", JAVASCRIPT)
+        self.assertIn("syncOutcomeFields", JAVASCRIPT)
+        self.assertIn("Choose at least one Outcome change type.", JAVASCRIPT)
+        self.assertEqual(3, JAVASCRIPT.count("outcomeDetailChoices("))
         self.assertIn("Select every applicable mapping", JAVASCRIPT)
         self.assertEqual(
             2,

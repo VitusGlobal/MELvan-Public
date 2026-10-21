@@ -31,7 +31,13 @@ from .media import (
     DemoSpeechTranscriber,
     STAGING_TTL_SECONDS,
 )
-from .model import AnalysisResult, MappingDecision, ModelAdapter, ModelError
+from .model import (
+    OUTCOME_CHANGE_TYPES,
+    AnalysisResult,
+    MappingDecision,
+    ModelAdapter,
+    ModelError,
+)
 from .pdf_export import build_evidence_pdf, export_filename
 
 
@@ -655,6 +661,13 @@ class MelvanService:
     ) -> dict[str, Any]:
         corrected = payload.get("corrected_classification") or None
         corrected_direction = payload.get("corrected_result_direction") or None
+        corrected_category = payload.get("corrected_outcome_category") or None
+        raw_change_types = payload.get("corrected_outcome_change_types")
+        if raw_change_types is not None and not isinstance(raw_change_types, list):
+            raise DomainError("Choose valid Outcome change types.")
+        corrected_change_types = list(
+            dict.fromkeys(str(value) for value in (raw_change_types or []) if str(value))
+        )
         comments = str(payload.get("comments") or "").strip() or None
         try:
             language_issue_types = self.learning.validate_language_feedback(
@@ -672,10 +685,13 @@ class MelvanService:
             raise DomainError("Choose a valid corrected classification.")
         if corrected_direction and corrected_direction not in {"Positive", "Negative"}:
             raise DomainError("Choose a valid result direction.")
+        if corrected_category and corrected_category not in OUTCOME_CHANGE_TYPES:
+            raise DomainError("Choose a valid Outcome category.")
         if new_element:
             raise DomainError("Only Administrators can change the Logic Model.", status=403)
         if not any(
-            [corrected, corrected_direction, comments, language_issue_types,
+            [corrected, corrected_direction, corrected_category, corrected_change_types,
+             comments, language_issue_types,
              mapping_supplied, new_element, reject_proposal]
         ):
             raise DomainError("Provide at least one correction or comment.")
@@ -688,8 +704,36 @@ class MelvanService:
         if mapping_ids:
             self._validate_mapping_ids(mapping_ids)
         final_classification = corrected or current_analysis["classification"]
-        if corrected_direction and final_classification != "Outcome":
-            raise DomainError("Result direction applies only to an Outcome.")
+        if final_classification == "Outcome":
+            was_outcome = current_analysis["classification"] == "Outcome"
+            final_direction = corrected_direction or (
+                current_analysis["result_direction"] if was_outcome else None
+            )
+            final_category = corrected_category or (
+                current_analysis["outcome_category"] if was_outcome else None
+            )
+            final_change_types = corrected_change_types or (
+                list(current_analysis["outcome_change_types"] or []) if was_outcome else []
+            )
+            if not final_direction:
+                raise DomainError("Choose an Outcome direction.")
+            if not final_category:
+                raise DomainError("Choose an Outcome category.")
+            if not final_change_types:
+                raise DomainError("Choose at least one Outcome change type.")
+            if any(
+                value not in OUTCOME_CHANGE_TYPES[final_category]
+                for value in final_change_types
+            ):
+                raise DomainError(
+                    "Choose Outcome change types that belong to the selected category."
+                )
+        else:
+            if corrected_direction or corrected_category or corrected_change_types:
+                raise DomainError("Outcome details apply only to an Outcome.")
+            final_direction = None
+            final_category = None
+            final_change_types = []
 
         structured_instructions = []
         if corrected:
@@ -697,6 +741,15 @@ class MelvanService:
         if corrected_direction:
             structured_instructions.append(
                 f"Reviewer result direction: {corrected_direction}."
+            )
+        if corrected_category:
+            structured_instructions.append(
+                f"Reviewer Outcome category: {corrected_category}."
+            )
+        if corrected_change_types:
+            structured_instructions.append(
+                "Reviewer Outcome change types: "
+                f"{', '.join(corrected_change_types)}."
             )
         if mapping_supplied:
             structured_instructions.append(
@@ -729,7 +782,20 @@ class MelvanService:
                 approved_examples=learning_context.examples,
             )
         )
-        result = self._apply_authoritative_result(result, corrected, corrected_direction)
+        result = self._apply_authoritative_result(
+            result,
+            final_classification,
+            corrected,
+            final_direction,
+            final_category,
+            final_change_types,
+            authoritative=bool(
+                corrected
+                or corrected_direction
+                or corrected_category
+                or corrected_change_types
+            ),
+        )
         feedback_id = self._new_id("feedback")
         rejected_snapshot = None
         with self.database.connection() as connection:
@@ -822,10 +888,11 @@ class MelvanService:
                 """
                 INSERT INTO review_feedback
                     (id, statement_id, analysis_id, corrected_classification,
-                     corrected_result_direction, comments,
+                     corrected_result_direction, corrected_outcome_category,
+                     corrected_outcome_change_types, comments,
                      mapping_ids, created_element_id, rejected_proposal_snapshot,
                      reviewer_id, language_issue_types, created_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     feedback_id,
@@ -833,6 +900,8 @@ class MelvanService:
                     displayed_analysis_id,
                     corrected,
                     corrected_direction,
+                    corrected_category,
+                    json.dumps(corrected_change_types),
                     comments,
                     json.dumps(mapping_ids),
                     created_element_id,
@@ -875,6 +944,8 @@ class MelvanService:
                     "selected_mapping_ids": mapping_ids if mapping_supplied else None,
                     "corrected_classification": corrected,
                     "corrected_result_direction": corrected_direction,
+                    "corrected_outcome_category": corrected_category,
+                    "corrected_outcome_change_types": corrected_change_types,
                     "mapping_supplied": mapping_supplied,
                     "new_element": bool(new_element),
                     "reject_proposal": reject_proposal,
@@ -4432,23 +4503,24 @@ class MelvanService:
     @staticmethod
     def _apply_authoritative_result(
         result: AnalysisResult,
+        final_classification: str,
         corrected: str | None,
-        corrected_direction: str | None,
+        final_direction: str | None,
+        final_category: str | None,
+        final_change_types: list[str],
+        *,
+        authoritative: bool,
     ) -> AnalysisResult:
-        if not corrected and not corrected_direction:
+        if not authoritative:
             return result
-        classification = corrected or result.classification
+        classification = final_classification
         if classification == "Outcome":
-            category = result.outcome_category or "C"
-            change_types = result.outcome_change_types or ["Capacity"]
+            category = final_category
+            change_types = final_change_types
         else:
             category = None
             change_types = []
-        direction = corrected_direction or result.result_direction if classification == "Outcome" else None
-        if classification == "Outcome" and direction is None:
-            raise DomainError(
-                "Choose a result direction when changing the classification to Outcome."
-            )
+        direction = final_direction if classification == "Outcome" else None
         return replace(
             result,
             classification=classification,
@@ -4522,6 +4594,7 @@ class MelvanService:
         feedback_rows = connection.execute(
             """
             SELECT analysis_id, corrected_classification, corrected_result_direction,
+                   corrected_outcome_category, corrected_outcome_change_types,
                    comments, mapping_ids, created_element_id, created_at
             FROM review_feedback
             WHERE statement_id = ?
@@ -4529,7 +4602,13 @@ class MelvanService:
             """,
             (statement["id"],),
         ).fetchall()
-        statement["review_feedback"] = [dict(item) for item in feedback_rows]
+        statement["review_feedback"] = []
+        for item in feedback_rows:
+            feedback = dict(item)
+            feedback["corrected_outcome_change_types"] = json.loads(
+                feedback["corrected_outcome_change_types"] or "[]"
+            )
+            statement["review_feedback"].append(feedback)
         attachment_row = connection.execute(
             """
             SELECT id, source, media_type, byte_size, width, height, checksum,

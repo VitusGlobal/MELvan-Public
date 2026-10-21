@@ -66,6 +66,7 @@ attachments, and local configuration are intentionally excluded.
 - [`migrations/versions/0001_postgresql_initial.py`](migrations/versions/0001_postgresql_initial.py) - Creates and removes the initial PostgreSQL schema.
 - [`migrations/versions/0002_postgresql_workspace_isolation.py`](migrations/versions/0002_postgresql_workspace_isolation.py) - Adds workspace ownership constraints, indexes, and row-level isolation.
 - [`migrations/versions/0003_password_setup_purpose.py`](migrations/versions/0003_password_setup_purpose.py) - Distinguishes initial password setup from password recovery across restricted sessions.
+- [`migrations/versions/0004_reviewer_outcome_metadata.py`](migrations/versions/0004_reviewer_outcome_metadata.py) - Persists authoritative Outcome category and change-type corrections from Reviewers.
 
 ## `scripts/`
 

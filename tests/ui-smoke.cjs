@@ -592,12 +592,18 @@ async function signIn(page, email, password = "Password1!") {
     if (mappingWidth.field < mappingWidth.panel * 0.9) throw new Error(`Existing mappings is not full width: ${JSON.stringify(mappingWidth)}`);
     if (!(await page.getByRole("radio", { name: "Outcome" }).isChecked())) throw new Error("Current classification is not preselected.");
     if (!(await page.getByRole("radio", { name: "Positive" }).isChecked())) throw new Error("Current Outcome direction is not preselected.");
+    if (!(await page.getByRole("radio", { name: "Behaviour, practice, use, adoption, collaboration, integration, or performance" }).isChecked())) throw new Error("Current Outcome category is not preselected.");
+    if (!(await page.getByRole("checkbox", { name: "Practice", exact: true }).isChecked())) throw new Error("Current Outcome change type is not preselected.");
     if (!(await page.getByRole("checkbox", { name: new RegExp(mo4.label) }).isChecked())) throw new Error("Current mapping is not preselected.");
     const tentativeChoice = page.getByRole("checkbox", { name: /Improved precision clinical decision-making.*Low confidence \(42%\)/ });
     if (!(await tentativeChoice.isChecked())) throw new Error("Low-confidence mapping is not independently preselected.");
     await page.getByRole("radio", { name: "Output" }).check();
     if (await page.getByRole("group", { name: "Outcome direction" }).isVisible()) throw new Error("Outcome direction remains visible for Output.");
+    if (await page.getByRole("group", { name: "Outcome category" }).isVisible()) throw new Error("Outcome category remains visible for Output.");
+    if (await page.getByRole("group", { name: "Outcome change type" }).isVisible()) throw new Error("Outcome change types remain visible for Output.");
     await page.getByRole("radio", { name: "Outcome" }).check();
+    if (!(await page.getByRole("group", { name: "Outcome category" }).isVisible())) throw new Error("Outcome category is missing after changing back to Outcome.");
+    if (!(await page.getByRole("group", { name: "Outcome change type" }).isVisible())) throw new Error("Outcome change types are missing after changing back to Outcome.");
     if (await page.getByText("Create a new Output", { exact: true }).count()) throw new Error("Reviewer can create a new Output.");
     if (await page.getByPlaceholder("Add any comments, corrections, or preferred wording for MELvan's language").count() !== 1) throw new Error("Statement Comments guidance is missing.");
     await page.getByRole("group", { name: /Provide feedback on the language MELVan used/ }).getByText("Unsupported or invented detail", { exact: true }).waitFor();

@@ -3,6 +3,18 @@
 This changelog begins with the first reviewed public-release candidate. Private
 development chronology and acceptance records are intentionally excluded.
 
+## 1.2.6 - 2026-10-31
+
+- Added Open Access to MELvan's stated values and explained why open access is
+  important to participation, transparency, scrutiny, and reuse.
+- Clarified that the repository is intended for installation in an operator's
+  own cloud environment, while the shared example-data demo is not a secure
+  production environment.
+- Made users and administrators explicitly responsible for security,
+  confidentiality, and compliance in their own deployments.
+- Removed the commercial consulting and subscription paragraph from About
+  MELvan.
+
 ## 1.2.5 - 2026-10-21
 
 - Added complete Reviewer controls for direction, category, and change types

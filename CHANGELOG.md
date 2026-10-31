@@ -3,6 +3,15 @@
 This changelog begins with the first reviewed public-release candidate. Private
 development chronology and acceptance records are intentionally excluded.
 
+## 1.2.7 - 2026-10-31
+
+- Added Canadian and Indigenous Data Sovereignty to the values presented in
+  **About MELvan**.
+- Moved the open-access explanation into a standalone question while retaining
+  the operator-responsibility and demo-environment warnings.
+- Clarified the demo Logic Model choices and warned against placing
+  confidential or sensitive information in the demo model.
+
 ## 1.2.6.1 - 2026-10-31
 
 - Restored a replayable PostgreSQL migration history by keeping Reviewer

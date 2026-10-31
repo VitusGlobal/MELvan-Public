@@ -107,6 +107,7 @@ class FrontendContractTestCase(unittest.TestCase):
             "Who does what in MELvan?",
             "How is MELvan evaluated as a tool?",
             "What kind of values are behind MELvan?",
+            "What do you mean when you say MELvan is open access?",
             "Is MELvan suitable for my program?",
             "How can I get a version of MELvan for my program?",
             "Are there any free open access resources about MELvan?",
@@ -115,9 +116,12 @@ class FrontendContractTestCase(unittest.TestCase):
         self.assertIn("An AI-assisted approach to capturing program impact", HTML)
         self.assertIn("https://doi.org/10.5281/zenodo.18902209", HTML)
         self.assertIn("https://doi.org/10.5281/zenodo.18456041", HTML)
-        self.assertIn("<strong>Open Access:</strong>", HTML)
+        self.assertNotIn("<strong>Open Access:</strong>", HTML)
+        self.assertIn("<strong>Open science:</strong> See our open access definition below.", HTML)
+        self.assertIn("<strong>Canadian and Indigenous Data Sovereignty:</strong>", HTML)
         self.assertIn("MELVan is offered as an open-access GitHub repository", HTML)
         self.assertIn("it should not be considered a secure production environment", HTML)
+        self.assertIn("Do not upload or share confidential and sensitive information", HTML)
         self.assertNotIn("Consulting and/or subscription fees will apply", HTML)
         self.assertIn("mailto:roxana@vitus.ca", HTML)
         self.assertIn(".about-content section", CSS)

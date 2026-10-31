@@ -254,11 +254,18 @@ class RelationalBoundaryTestCase(unittest.TestCase):
                     table,
                 )
 
-    def test_initial_postgresql_tables_match_current_sqlite_columns(self) -> None:
+    def test_initial_postgresql_tables_match_their_historical_columns(self) -> None:
         root = Path(__file__).resolve().parents[1]
         migration = (root / "migrations/postgresql_initial.sql").read_text(
             encoding="utf-8"
         )
+        columns_added_after_initial = {
+            "authenticated_sessions": {"password_setup_purpose"},
+            "review_feedback": {
+                "corrected_outcome_category",
+                "corrected_outcome_change_types",
+            },
+        }
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "current.sqlite3"
             Database(path).initialize(
@@ -295,8 +302,7 @@ class RelationalBoundaryTestCase(unittest.TestCase):
                             name = parts[0].rstrip(",")
                             if name in current:
                                 migrated.add(name)
-                    if table == "authenticated_sessions":
-                        current.remove("password_setup_purpose")
+                    current -= columns_added_after_initial.get(table, set())
                     self.assertEqual(current, migrated, table)
             finally:
                 connection.close()
@@ -325,11 +331,17 @@ class RelationalBoundaryTestCase(unittest.TestCase):
         self.assertIn("'initial_setup', 'recovery'", migration)
 
     def test_reviewer_outcome_metadata_migration_is_present(self) -> None:
+        initial = (
+            Path(__file__).resolve().parents[1]
+            / "migrations/postgresql_initial.sql"
+        ).read_text(encoding="utf-8")
         migration = (
             Path(__file__).resolve().parents[1]
             / "migrations/versions/0004_reviewer_outcome_metadata.py"
         ).read_text(encoding="utf-8")
 
+        self.assertNotIn("corrected_outcome_category", initial)
+        self.assertNotIn("corrected_outcome_change_types", initial)
         self.assertIn('"corrected_outcome_category"', migration)
         self.assertIn('"corrected_outcome_change_types"', migration)
 

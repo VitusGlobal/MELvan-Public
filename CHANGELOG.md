@@ -3,6 +3,16 @@
 This changelog begins with the first reviewed public-release candidate. Private
 development chronology and acceptance records are intentionally excluded.
 
+## 1.2.6.1 - 2026-10-31
+
+- Restored a replayable PostgreSQL migration history by keeping Reviewer
+  Outcome metadata out of the historical `0001` schema and introducing it only
+  through migration `0004`.
+- Added regression coverage that prevents columns owned by later migrations
+  from being copied back into the initial schema.
+- Verified the deterministic suite and offline PostgreSQL migration chain; the
+  repository integration job remains the live PostgreSQL execution check.
+
 ## 1.2.6 - 2026-10-31
 
 - Added Open Access to MELvan's stated values and explained why open access is

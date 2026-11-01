@@ -97,8 +97,10 @@ class ModelValidationTestCase(unittest.TestCase):
         self.assertIn("set outcome_category to null", instructions)
         self.assertIn("outcome_change_types to an empty array", instructions)
         self.assertIn("An Activity is work that is planned", instructions)
-        self.assertIn("are not Outcomes unless", instructions)
-        self.assertIn("a change has actually occurred", instructions)
+        self.assertIn("are not by themselves Outcomes", instructions)
+        self.assertIn("completed decision", instructions)
+        self.assertIn("do not treat Activity as a terminal default", instructions)
+        self.assertIn("below 0.25", instructions)
 
     def test_foundry_connectivity_check_completes_real_model_request(self) -> None:
         calls = []
@@ -148,13 +150,75 @@ class ModelValidationTestCase(unittest.TestCase):
         self.assertEqual("low", request["text"]["verbosity"])
 
     def test_schema_enumerates_canonical_outcome_change_types(self) -> None:
-        schema = OpenAIModelAdapter._schema()
+        schema = OpenAIModelAdapter._schema(ELEMENTS)
         change_types = schema["properties"]["outcome_change_types"]["items"]["enum"]
         self.assertIn("Attitude", change_types)
         self.assertIn("Practice", change_types)
         self.assertNotIn("Satisfaction", change_types)
         mapping = schema["properties"]["mapping_decisions"]["items"]
         self.assertEqual(["element_id", "confidence", "rationale"], mapping["required"])
+        self.assertEqual(
+            ["O1", "O2"],
+            mapping["properties"]["element_id"]["enum"],
+        )
+
+    def test_reported_meeting_outcome_category_is_reconciled_from_change_type(self) -> None:
+        payload = valid_payload()
+        payload.update(
+            {
+                "classification": "Outcome",
+                "outcome_category": "B",
+                "outcome_change_types": ["Capacity"],
+            }
+        )
+
+        class Responses:
+            @staticmethod
+            def create(**kwargs):
+                return SimpleNamespace(status="completed", output_text=json.dumps(payload))
+
+        adapter = AzureFoundryModelAdapter(self.foundry_settings())
+        adapter._client = SimpleNamespace(responses=Responses())
+        result = adapter.analyze(
+            "MBC team meeting bridging clinical and PCYMH leaders, project support "
+            "members convened for first time to use RACI to define project roles "
+            "and responsibilities.",
+            ELEMENTS,
+        )
+        self.assertEqual("C", result.outcome_category)
+        self.assertEqual("outcome_category_reconciled", result.diagnostics[0]["type"])
+
+    def test_foundry_retries_once_after_invalid_mapping(self) -> None:
+        calls = []
+        invalid = valid_payload()
+        invalid["mapping_decisions"] = [
+            {"element_id": "UNKNOWN", "confidence": 0.8, "rationale": "Invented."}
+        ]
+
+        class Responses:
+            @staticmethod
+            def create(**kwargs):
+                calls.append(kwargs)
+                payload = invalid if len(calls) == 1 else valid_payload()
+                return SimpleNamespace(status="completed", output_text=json.dumps(payload))
+
+        adapter = AzureFoundryModelAdapter(self.foundry_settings())
+        adapter._client = SimpleNamespace(responses=Responses())
+        result = adapter.analyze(
+            "PCYMH mental health Datamart will be incorporated into hospital data "
+            "governance framework with support from analysts, research system analyst "
+            "and leadership.",
+            ELEMENTS,
+            statement_context="This is a change for the way the organization performs.",
+        )
+        self.assertEqual(["O1"], result.match_ids)
+        self.assertEqual(2, len(calls))
+        retry_context = json.loads(calls[1]["input"])
+        self.assertEqual(
+            "EXISTING_MAPPING_INVALID",
+            retry_context["validation_feedback"]["code"],
+        )
+        self.assertEqual("corrective_retry", result.diagnostics[-1]["type"])
 
     def test_valid_existing_match(self) -> None:
         result = validate_result(valid_payload(), ELEMENTS, "gpt-5-mini")

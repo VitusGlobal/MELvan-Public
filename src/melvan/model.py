@@ -11,7 +11,7 @@ import shutil
 import subprocess
 import urllib.error
 import urllib.request
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field, replace
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterable
@@ -46,11 +46,24 @@ OUTCOME_CHANGE_TYPES = {
 ALL_OUTCOME_CHANGE_TYPES = sorted(
     {change_type for values in OUTCOME_CHANGE_TYPES.values() for change_type in values}
 )
-PROMPT_VERSION = "statement-analysis-v4"
+PROMPT_VERSION = "statement-analysis-v5"
 
 
 class ModelError(RuntimeError):
     """A visible, recoverable model integration failure."""
+
+
+class ModelValidationError(ModelError):
+    """A structured model-contract failure eligible for one corrective retry."""
+
+    def __init__(self, code: str, message: str, **details: Any):
+        super().__init__(f"{message} [diagnostic: {code}]")
+        self.code = code
+        self.message = message
+        self.details = details
+
+    def diagnostic(self) -> dict[str, Any]:
+        return {"code": self.code, "message": self.message, "details": self.details}
 
 
 @dataclass(frozen=True)
@@ -82,6 +95,7 @@ class AnalysisResult:
     proposed_element: ProposedElement | None
     model_version: str
     prompt_version: str = PROMPT_VERSION
+    diagnostics: list[dict[str, Any]] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
         value = asdict(self)
@@ -501,36 +515,59 @@ class OpenAIModelAdapter(ModelAdapter):
             "rejected_proposal": rejected_proposal,
             "approved_examples": approved_examples or [],
         }
-        body = {
-            "model": self.settings.model_name,
-            "store": False,
-            "max_output_tokens": 800,
-            "reasoning": {"effort": "minimal"},
-            "instructions": self._instructions(),
-            "input": json.dumps(context, ensure_ascii=True),
-            "text": {
-                "verbosity": "low",
-                "format": {
-                    "type": "json_schema",
-                    "name": "melvan_statement_analysis",
-                    "strict": True,
-                    "schema": self._schema(),
+        validation_failures: list[dict[str, Any]] = []
+        for attempt in range(2):
+            body = {
+                "model": self.settings.model_name,
+                "store": False,
+                "max_output_tokens": 800,
+                "reasoning": {"effort": "minimal"},
+                "instructions": self._instructions(),
+                "input": json.dumps(context, ensure_ascii=True),
+                "text": {
+                    "verbosity": "low",
+                    "format": {
+                        "type": "json_schema",
+                        "name": "melvan_statement_analysis",
+                        "strict": True,
+                        "schema": self._schema(elements),
+                    }
+                },
+            }
+            request = urllib.request.Request(
+                f"{self.settings.openai_base_url}/responses",
+                data=json.dumps(body).encode("utf-8"),
+                headers=self._headers(),
+                method="POST",
+            )
+            response = self._send(request)
+            raw_text = self._response_text(response)
+            try:
+                payload = json.loads(raw_text)
+            except json.JSONDecodeError as exc:
+                raise ModelError("The model returned content that was not valid JSON.") from exc
+            try:
+                result = validate_result(payload, elements, self.settings.model_name)
+            except ModelValidationError as exc:
+                validation_failures.append(exc.diagnostic())
+                if attempt == 1:
+                    raise
+                context["validation_feedback"] = {
+                    **exc.diagnostic(),
+                    "instruction": (
+                        "Correct the inconsistency and return a complete replacement analysis. "
+                        "Use only IDs from existing_elements."
+                    ),
                 }
-            },
-        }
-        request = urllib.request.Request(
-            f"{self.settings.openai_base_url}/responses",
-            data=json.dumps(body).encode("utf-8"),
-            headers=self._headers(),
-            method="POST",
-        )
-        response = self._send(request)
-        raw_text = self._response_text(response)
-        try:
-            payload = json.loads(raw_text)
-        except json.JSONDecodeError as exc:
-            raise ModelError("The model returned content that was not valid JSON.") from exc
-        return validate_result(payload, elements, self.settings.model_name)
+                continue
+            if validation_failures:
+                result = replace(
+                    result,
+                    diagnostics=result.diagnostics
+                    + [{"type": "corrective_retry", "failures": validation_failures}],
+                )
+            return result
+        raise AssertionError("The bounded analysis loop did not return or raise.")
 
     def structure_logic_model(
         self,
@@ -673,8 +710,16 @@ class OpenAIModelAdapter(ModelAdapter):
             "An Outcome is an observed change in state, condition, behaviour, practice, use, "
             "capacity, knowledge, or a related result. An Indicator is a measure used to track "
             "an Output or Outcome. Intentions, efforts, requests, plans, and scheduled work, "
-            "including language such as seeking to do something, are not Outcomes unless the "
-            "Statement also reports that a change has actually occurred. "
+            "including language such as seeking to do something, are not by themselves Outcomes. "
+            "However, treat each submitted Statement as a report of something the Reporter believes "
+            "is relevant and important. Present or future tense may describe a completed decision, "
+            "commitment, agreement, first-time collaboration, or other change that has already "
+            "occurred. Classify that underlying result rather than relying on verb tense alone. For "
+            "example, 'the Datamart will be incorporated into governance' can report an Outcome when "
+            "the incorporation decision or commitment has been made. A meeting can report an Outcome "
+            "when the important event is a new collaboration or new capacity, rather than merely the "
+            "act of convening. Err toward a reviewable classification and mapping when evidence is "
+            "ambiguous; do not treat Activity as a terminal default. "
             "Always set result_direction to Positive or Negative for an Outcome. The transport "
             "requires a value, but MELvan ignores it for Activity, Output, and Indicator. "
             "Positive means the reported result supports the intended program direction; "
@@ -692,8 +737,10 @@ class OpenAIModelAdapter(ModelAdapter):
             "Outputs and Outcomes first using semantic and causal fit. Use one or more existing "
             "IDs whenever defensible. For every selected element, return an independent confidence "
             "score and a brief rationale specific to that relationship; do not assign one aggregate "
-            "confidence to multiple mappings. Return a mapping decision only when its confidence is "
-            "at least 0.25. Scores from 0.25 up to but not including 0.50 are tentative hypotheses; "
+            "confidence to multiple mappings. Normally return mappings with confidence of at least "
+            "0.25. If no plausible mapping reaches 0.25, return up to three strongest plausible "
+            "current-element mappings below 0.25 so a Reviewer can resolve the ambiguity. Scores from "
+            "0.25 up to but not including 0.50 are tentative hypotheses; "
             "scores of 0.50 or more are supported mappings. Return no more than three tentative "
             "mapping decisions. Return no_suitable_match when no suitable existing Logic Model "
             "element exists. Never propose or invent an Output, Outcome, Working Outcome, or "
@@ -711,7 +758,10 @@ class OpenAIModelAdapter(ModelAdapter):
         )
 
     @staticmethod
-    def _schema() -> dict[str, Any]:
+    def _schema(elements: list[dict[str, Any]] | None = None) -> dict[str, Any]:
+        element_id_schema: dict[str, Any] = {"type": "string"}
+        if elements:
+            element_id_schema["enum"] = [str(element["id"]) for element in elements]
         return {
             "type": "object",
             "additionalProperties": False,
@@ -740,7 +790,7 @@ class OpenAIModelAdapter(ModelAdapter):
                         "type": "object",
                         "additionalProperties": False,
                         "properties": {
-                            "element_id": {"type": "string"},
+                            "element_id": element_id_schema,
                             "confidence": {"type": "number", "minimum": 0, "maximum": 1},
                             "rationale": {"type": "string"},
                         },
@@ -883,39 +933,62 @@ class AzureFoundryModelAdapter(OpenAIModelAdapter):
             "rejected_proposal": rejected_proposal,
             "approved_examples": approved_examples or [],
         }
-        try:
-            response = self._client.responses.create(
-                model=self.settings.model_name,
-                store=False,
-                max_output_tokens=800,
-                reasoning={"effort": "minimal"},
-                instructions=self._instructions(),
-                input=json.dumps(context, ensure_ascii=True),
-                text={
-                    "verbosity": "low",
-                    "format": {
-                        "type": "json_schema",
-                        "name": "melvan_statement_analysis",
-                        "strict": True,
-                        "schema": self._schema(),
-                    }
-                },
-            )
-        except Exception as exc:
-            raise ModelError(f"Azure Foundry model request failed: {exc}") from exc
-        if getattr(response, "status", None) != "completed":
-            detail = getattr(response, "incomplete_details", None) or getattr(
-                response, "status", "unknown"
-            )
-            raise ModelError(f"Azure Foundry did not complete the analysis: {detail}")
-        raw_text = getattr(response, "output_text", "")
-        if not raw_text:
-            raise ModelError("Azure Foundry returned no structured analysis text.")
-        try:
-            payload = json.loads(raw_text)
-        except json.JSONDecodeError as exc:
-            raise ModelError("Azure Foundry returned content that was not valid JSON.") from exc
-        return validate_result(payload, elements, self.settings.model_name)
+        validation_failures: list[dict[str, Any]] = []
+        for attempt in range(2):
+            try:
+                response = self._client.responses.create(
+                    model=self.settings.model_name,
+                    store=False,
+                    max_output_tokens=800,
+                    reasoning={"effort": "minimal"},
+                    instructions=self._instructions(),
+                    input=json.dumps(context, ensure_ascii=True),
+                    text={
+                        "verbosity": "low",
+                        "format": {
+                            "type": "json_schema",
+                            "name": "melvan_statement_analysis",
+                            "strict": True,
+                            "schema": self._schema(elements),
+                        }
+                    },
+                )
+            except Exception as exc:
+                raise ModelError(f"Azure Foundry model request failed: {exc}") from exc
+            if getattr(response, "status", None) != "completed":
+                detail = getattr(response, "incomplete_details", None) or getattr(
+                    response, "status", "unknown"
+                )
+                raise ModelError(f"Azure Foundry did not complete the analysis: {detail}")
+            raw_text = getattr(response, "output_text", "")
+            if not raw_text:
+                raise ModelError("Azure Foundry returned no structured analysis text.")
+            try:
+                payload = json.loads(raw_text)
+            except json.JSONDecodeError as exc:
+                raise ModelError("Azure Foundry returned content that was not valid JSON.") from exc
+            try:
+                result = validate_result(payload, elements, self.settings.model_name)
+            except ModelValidationError as exc:
+                validation_failures.append(exc.diagnostic())
+                if attempt == 1:
+                    raise
+                context["validation_feedback"] = {
+                    **exc.diagnostic(),
+                    "instruction": (
+                        "Correct the inconsistency and return a complete replacement analysis. "
+                        "Use only IDs from existing_elements."
+                    ),
+                }
+                continue
+            if validation_failures:
+                result = replace(
+                    result,
+                    diagnostics=result.diagnostics
+                    + [{"type": "corrective_retry", "failures": validation_failures}],
+                )
+            return result
+        raise AssertionError("The bounded analysis loop did not return or raise.")
 
     def structure_logic_model(
         self,
@@ -1071,23 +1144,66 @@ class AzureFoundryModelAdapter(OpenAIModelAdapter):
 def validate_result(
     payload: dict[str, Any], elements: list[dict[str, Any]], model_version: str
 ) -> AnalysisResult:
+    diagnostics: list[dict[str, Any]] = []
     classification = payload.get("classification")
     if classification not in CLASSIFICATIONS:
-        raise ModelError("The model returned an unsupported classification.")
+        raise ModelValidationError(
+            "CLASSIFICATION_UNSUPPORTED",
+            "The model returned an unsupported RBM level.",
+            returned=classification,
+        )
     category = payload.get("outcome_category")
     change_types = payload.get("outcome_change_types") or []
     raw_direction = payload.get("result_direction")
     if raw_direction not in {"Positive", "Negative"}:
-        raise ModelError("The model returned an invalid result direction.")
+        raise ModelValidationError(
+            "OUTCOME_DIRECTION_INVALID",
+            "The model returned an invalid result direction.",
+            returned=raw_direction,
+        )
     direction = raw_direction if classification == "Outcome" else None
     if classification == "Outcome":
         if direction is None:  # Defensive invariant; the transport schema is non-nullable.
-            raise ModelError("An Outcome must include a valid result direction.")
+            raise ModelValidationError(
+                "OUTCOME_DIRECTION_REQUIRED",
+                "An Outcome must include a valid result direction.",
+            )
     if classification == "Outcome":
-        if category not in OUTCOME_CHANGE_TYPES or not change_types:
-            raise ModelError("An Outcome must include a valid category and change type.")
-        if any(value not in OUTCOME_CHANGE_TYPES[category] for value in change_types):
-            raise ModelError("The model returned an invalid Outcome change type.")
+        inferred_categories = {
+            candidate
+            for value in change_types
+            for candidate, allowed in OUTCOME_CHANGE_TYPES.items()
+            if value in allowed
+        }
+        if not change_types or not inferred_categories:
+            raise ModelValidationError(
+                "OUTCOME_METADATA_REQUIRED",
+                "An Outcome must include a valid category and change type.",
+                category=category,
+                change_types=change_types,
+            )
+        if category not in OUTCOME_CHANGE_TYPES or any(
+            value not in OUTCOME_CHANGE_TYPES[category] for value in change_types
+        ):
+            if len(inferred_categories) == 1:
+                inferred_category = next(iter(inferred_categories))
+                diagnostics.append(
+                    {
+                        "type": "outcome_category_reconciled",
+                        "from": category,
+                        "to": inferred_category,
+                        "change_types": list(change_types),
+                    }
+                )
+                category = inferred_category
+            else:
+                raise ModelValidationError(
+                    "OUTCOME_METADATA_INCONSISTENT",
+                    "The model returned Outcome change types from incompatible categories.",
+                    category=category,
+                    change_types=change_types,
+                    inferred_categories=sorted(inferred_categories),
+                )
     else:
         # These fields are required by the structured transport schema. Discard
         # harmless Outcome-only metadata when the classification makes it inapplicable.
@@ -1107,13 +1223,27 @@ def validate_result(
     ids = [item.element_id for item in decisions]
     valid_ids = {element["id"] for element in elements}
     if status == "existing_match":
-        if (
-            not ids
-            or len(ids) != len(set(ids))
-            or any(element_id not in valid_ids for element_id in ids)
-            or any(not item.rationale for item in decisions)
-        ):
-            raise ModelError("The model returned an invalid existing-element mapping.")
+        mapping_issues: list[str] = []
+        if not ids:
+            mapping_issues.append("missing_mapping")
+        if len(ids) != len(set(ids)):
+            mapping_issues.append("duplicate_mapping")
+        unknown_ids = sorted(element_id for element_id in ids if element_id not in valid_ids)
+        if unknown_ids:
+            mapping_issues.append("unknown_element_id")
+        missing_rationale_positions = [
+            index + 1 for index, item in enumerate(decisions) if not item.rationale
+        ]
+        if missing_rationale_positions:
+            mapping_issues.append("missing_rationale")
+        if mapping_issues:
+            raise ModelValidationError(
+                "EXISTING_MAPPING_INVALID",
+                "The model returned an invalid existing-element mapping.",
+                issues=mapping_issues,
+                unknown_element_ids=unknown_ids,
+                missing_rationale_positions=missing_rationale_positions,
+            )
         if payload.get("proposed_element") is not None:
             raise ModelError("A proposal cannot accompany an existing match.")
     elif status == "no_suitable_match":
@@ -1140,6 +1270,7 @@ def validate_result(
         no_match_rationale=str(payload.get("no_match_rationale") or "").strip(),
         proposed_element=None,
         model_version=model_version,
+        diagnostics=diagnostics,
     )
 
 

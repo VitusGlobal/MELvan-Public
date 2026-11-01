@@ -318,7 +318,7 @@ class ServiceTestCase(unittest.TestCase):
             [item["rationale"] for item in statement["mappings"]],
         )
 
-    def test_all_mapping_proposals_below_quarter_become_no_match(self) -> None:
+    def test_strongest_mapping_proposals_below_quarter_are_retained_as_fallbacks(self) -> None:
         text = "Community partners are using evidence-informed practices in service planning."
         base = self.service.model.analyze(text, self.service._catalogue_for_matching())
         result = replace(
@@ -333,9 +333,12 @@ class ServiceTestCase(unittest.TestCase):
         )
         with mock.patch.object(self.service.model, "analyze", return_value=result):
             statement = self.service.create_statement(text)
-        self.assertEqual([], statement["mappings"])
-        self.assertEqual("no_suitable_match", statement["analysis"]["match_status"])
-        self.assertIn("25% display threshold", statement["analysis"]["mapping_rationale"])
+        self.assertEqual(["MO4", "LO5"], [item["id"] for item in statement["mappings"]])
+        self.assertEqual(
+            ["very_low", "very_low"],
+            [item["confidence_tier"] for item in statement["mappings"]],
+        )
+        self.assertEqual("existing_match", statement["analysis"]["match_status"])
 
     def test_pending_mapping_at_half_is_shown_and_can_be_accepted(self) -> None:
         statement = self.service.create_statement(
@@ -431,6 +434,50 @@ class ServiceTestCase(unittest.TestCase):
         self.assertEqual(1, diagnostics["tentative_mappings_presented"])
         self.assertEqual(0, diagnostics["tentative_mappings_accepted"])
         self.assertEqual(1, diagnostics["tentative_mappings_rejected"])
+
+    def test_rejecting_only_very_low_fallback_mapping_is_score_neutral(self) -> None:
+        text = "A decision was made to incorporate the Datamart into governance."
+        base = self.service.model.analyze(text, self.service._catalogue_for_matching())
+        result = replace(
+            base,
+            match_status="existing_match",
+            mapping_decisions=[
+                MappingDecision("MO4", 0.18, "Weak but plausible governance relationship."),
+            ],
+            no_match_rationale="",
+            proposed_element=None,
+        )
+        with mock.patch.object(self.service.model, "analyze", return_value=result):
+            statement = self.service.create_statement(text, "reporter-one")
+        self.assertEqual("very_low", statement["mappings"][0]["confidence_tier"])
+
+        revised_result = replace(
+            base,
+            match_status="no_suitable_match",
+            mapping_decisions=[],
+            no_match_rationale="The Reviewer rejected the fallback mapping.",
+            proposed_element=None,
+        )
+        with mock.patch.object(self.service.model, "analyze", return_value=revised_result):
+            self.service.submit_feedback(
+                statement["id"],
+                {
+                    "analysis_id": statement["analysis"]["id"],
+                    "mapping_ids": [],
+                },
+                "reviewer-one",
+            )
+        with self.database.connection() as connection:
+            score = connection.execute(
+                "SELECT first_review_approval, correct_mapping, source_signals_json "
+                "FROM scoring_events WHERE statement_id = ?",
+                (statement["id"],),
+            ).fetchone()
+        self.assertEqual(1, score["first_review_approval"])
+        self.assertEqual(1, score["correct_mapping"])
+        signals = json.loads(score["source_signals_json"])
+        self.assertTrue(signals["only_tentative_mapping_rejections"])
+        self.assertEqual(["MO4"], signals["tentative_mapping_rejections"])
 
     def test_accepting_tentative_mapping_counts_as_correct_and_is_learned(self) -> None:
         text = "Community partners are using evidence-informed practices in service planning."

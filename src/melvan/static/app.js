@@ -1510,10 +1510,11 @@ function mappingList(statement) {
     const proposed = mapping.status === "provisional";
     const sourceLabel = proposed ? "MELvan proposal" : mapping.source === "reviewer" ? "Reviewer-created" : levelLabel(mapping.level);
     const confidence = mapping.confidence == null ? "" : `<span class="mapping-confidence">${percent(mapping.confidence)} confidence</span>`;
-    const lowConfidence = mapping.confidence_tier === "low";
-    const lowTag = lowConfidence ? `<span class="low-confidence-tag"><i data-lucide="triangle-alert" aria-hidden="true"></i>Low confidence</span>` : "";
+    const veryLowConfidence = mapping.confidence_tier === "very_low";
+    const lowConfidence = mapping.confidence_tier === "low" || veryLowConfidence;
+    const lowTag = lowConfidence ? `<span class="low-confidence-tag"><i data-lucide="triangle-alert" aria-hidden="true"></i>${veryLowConfidence ? "Very low confidence" : "Low confidence"}</span>` : "";
     const rationale = mapping.rationale ? `<p class="mapping-item-rationale">${escapeHtml(mapping.rationale)}</p>` : "";
-    return `<div class="mapping-item ${proposed ? "is-proposed" : ""} ${lowConfidence ? "is-low-confidence" : ""}"><div class="mapping-item-heading"><span class="mapping-label">${escapeHtml(mapping.label)}</span><span class="mapping-confidence-group">${lowTag}${confidence}</span></div><span class="mapping-meta">${escapeHtml(sourceLabel)} · ${escapeHtml(mapping.display_id || mapping.id)}</span>${rationale}</div>`;
+    return `<div class="mapping-item ${proposed ? "is-proposed" : ""} ${lowConfidence ? "is-low-confidence" : ""} ${veryLowConfidence ? "is-very-low-confidence" : ""}"><div class="mapping-item-heading"><span class="mapping-label">${escapeHtml(mapping.label)}</span><span class="mapping-confidence-group">${lowTag}${confidence}</span></div><span class="mapping-meta">${escapeHtml(sourceLabel)} · ${escapeHtml(mapping.display_id || mapping.id)}</span>${rationale}</div>`;
   }).join("");
 }
 
@@ -1560,7 +1561,7 @@ function mappingChoices(elements, selectedIds, label, proposedMappings = []) {
     <label class="option-choice mapping-choice">
       <input class="option-input option-checkbox" type="checkbox" name="mapping_ids" value="${escapeHtml(element.id)}" ${selected.has(element.id) ? "checked" : ""} />
       <span class="option-mark" aria-hidden="true"></span>
-      <span class="mapping-choice-copy"><strong>${escapeHtml(element.label)}</strong><small>${escapeHtml(element.display_id || element.id)}${proposedById.get(element.id)?.confidence_tier === "low" ? ` · Low confidence (${percent(proposedById.get(element.id).confidence)})` : ""}</small></span>
+      <span class="mapping-choice-copy"><strong>${escapeHtml(element.label)}</strong><small>${escapeHtml(element.display_id || element.id)}${proposedById.get(element.id)?.confidence_tier === "very_low" ? ` · Very low confidence (${percent(proposedById.get(element.id).confidence)})` : proposedById.get(element.id)?.confidence_tier === "low" ? ` · Low confidence (${percent(proposedById.get(element.id).confidence)})` : ""}</small></span>
     </label>`).join("")}</div><p class="field-help">Select every applicable mapping, or leave all unchecked to record no suitable current match.</p></fieldset>`;
 }
 
@@ -1698,9 +1699,10 @@ function mappingLine(mapping) {
     ? `<span class="mapping-confidence">Confidence unavailable</span>`
     : `<span class="mapping-confidence">${percent(mapping.confidence)} confidence</span>`;
   const rationale = mapping.rationale ? `<p class="mapping-item-rationale">${escapeHtml(mapping.rationale)}</p>` : "";
-  const lowConfidence = mapping.confidence_tier === "low";
-  const lowTag = lowConfidence ? `<span class="low-confidence-tag"><i data-lucide="triangle-alert" aria-hidden="true"></i>Low confidence</span>` : "";
-  return `<div class="mapping-item ${lowConfidence ? "is-low-confidence" : ""}"><div class="mapping-item-heading"><span class="mapping-label">${escapeHtml(mapping.label)}</span><span class="mapping-confidence-group">${lowTag}${confidence}</span></div><span class="mapping-meta">${escapeHtml(mapping.display_id || mapping.id)}</span>${rationale}</div>`;
+  const veryLowConfidence = mapping.confidence_tier === "very_low";
+  const lowConfidence = mapping.confidence_tier === "low" || veryLowConfidence;
+  const lowTag = lowConfidence ? `<span class="low-confidence-tag"><i data-lucide="triangle-alert" aria-hidden="true"></i>${veryLowConfidence ? "Very low confidence" : "Low confidence"}</span>` : "";
+  return `<div class="mapping-item ${lowConfidence ? "is-low-confidence" : ""} ${veryLowConfidence ? "is-very-low-confidence" : ""}"><div class="mapping-item-heading"><span class="mapping-label">${escapeHtml(mapping.label)}</span><span class="mapping-confidence-group">${lowTag}${confidence}</span></div><span class="mapping-meta">${escapeHtml(mapping.display_id || mapping.id)}</span>${rationale}</div>`;
 }
 
 function renderEvidence() {

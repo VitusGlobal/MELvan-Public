@@ -3,6 +3,21 @@
 This changelog begins with the first reviewed public-release candidate. Private
 development chronology and acceptance records are intentionally excluded.
 
+## 1.2.8 - 2026-11-01
+
+- Treated Reporter submissions as presumptively relevant and interpreted
+  completed decisions, commitments, and new collaborations as possible results
+  even when written in present or future tense.
+- Reconciled unambiguous Outcome category/change-type mismatches instead of
+  failing otherwise valid analyses.
+- Restricted generated mappings to active Logic Model elements and added one
+  bounded corrective attempt for internally inconsistent model output.
+- Retained the strongest plausible current mappings when none reaches 25%,
+  labelled them **Very low confidence**, and kept their rejection neutral in
+  MELvan performance scoring.
+- Added structured analysis diagnostics and regression coverage for the
+  reported Outcome-metadata and existing-mapping failure modes.
+
 ## 1.2.7 - 2026-10-31
 
 - Added Canadian and Indigenous Data Sovereignty to the values presented in

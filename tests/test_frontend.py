@@ -16,6 +16,8 @@ LOGO = ROOT / "src" / "melvan" / "static" / "assets" / "melvan-logo.png"
 class FrontendContractTestCase(unittest.TestCase):
     def test_low_confidence_mapping_has_visible_non_color_cue(self) -> None:
         self.assertIn("Low confidence", JAVASCRIPT)
+        self.assertIn("Very low confidence", JAVASCRIPT)
+        self.assertIn("is-very-low-confidence", JAVASCRIPT)
         self.assertIn('data-lucide="triangle-alert"', JAVASCRIPT)
         self.assertIn("is-low-confidence", CSS)
         self.assertIn("border: 1px dashed", CSS)

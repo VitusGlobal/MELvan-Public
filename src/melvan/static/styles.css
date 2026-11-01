@@ -1139,6 +1139,16 @@ select[multiple] {
   background: #fff9e8;
 }
 
+.mapping-item.is-very-low-confidence {
+  border-color: #9f1410;
+  border-left-color: #9f1410;
+  background: #fff2f0;
+}
+
+.mapping-item.is-very-low-confidence .low-confidence-tag {
+  color: #9f1410;
+}
+
 .mapping-item-heading {
   display: flex;
   align-items: flex-start;

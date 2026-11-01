@@ -37,6 +37,7 @@ from .model import (
     MappingDecision,
     ModelAdapter,
     ModelError,
+    ModelValidationError,
 )
 from .pdf_export import build_evidence_pdf, export_filename
 
@@ -293,6 +294,11 @@ class MelvanService:
                     {"analysis_id": analysis_id, "classification": result.classification},
                 )
         except (ModelError, ValueError, KeyError, TypeError) as exc:
+            error_details = (
+                exc.diagnostic()
+                if isinstance(exc, ModelValidationError)
+                else {"code": "MODEL_ANALYSIS_FAILED", "message": str(exc), "details": {}}
+            )
             with self.database.connection() as connection:
                 connection.execute(
                     "UPDATE statements SET status = 'failed', processing_error = ? WHERE id = ?",
@@ -303,9 +309,13 @@ class MelvanService:
                     "analysis_failed",
                     "statement",
                     statement_id,
-                    {"error": str(exc)},
+                    error_details,
                 )
-            raise DomainError(f"The Statement was saved, but analysis failed: {exc}", status=502) from exc
+            raise DomainError(
+                "The Statement was saved, but MELvan could not complete a valid analysis "
+                f"after its corrective check: {exc}",
+                status=502,
+            ) from exc
 
         return self.get_statement(statement_id)
 
@@ -4436,6 +4446,14 @@ class MelvanService:
             )
         if learning_context:
             self.learning.attach_analysis(connection, analysis_id, learning_context)
+        if result.diagnostics:
+            self._audit(
+                connection,
+                "analysis_diagnostic",
+                "analysis",
+                analysis_id,
+                {"diagnostics": result.diagnostics},
+            )
         return analysis_id
 
     @staticmethod
@@ -4448,11 +4466,20 @@ class MelvanService:
         tentative = [
             decision
             for decision in result.mapping_decisions
-            if MelvanService._mapping_is_tentative(decision.confidence)
+            if (
+                MelvanService._mapping_confidence_qualifies(decision.confidence)
+                and MelvanService._mapping_is_tentative(decision.confidence)
+            )
         ]
         tentative.sort(key=lambda decision: decision.confidence, reverse=True)
         tentative = tentative[:MAX_TENTATIVE_MAPPINGS]
         qualifying = supported + tentative
+        if not qualifying and result.mapping_decisions:
+            qualifying = sorted(
+                result.mapping_decisions,
+                key=lambda decision: decision.confidence,
+                reverse=True,
+            )[:MAX_TENTATIVE_MAPPINGS]
         if qualifying == result.mapping_decisions and result.proposed_element is None:
             return result
         if qualifying:
@@ -4468,10 +4495,7 @@ class MelvanService:
             match_status="no_suitable_match",
             mapping_decisions=[],
             proposed_element=None,
-            no_match_rationale=(
-                result.no_match_rationale
-                or "No existing Logic Model mapping reached the required 25% display threshold."
-            ),
+            no_match_rationale=result.no_match_rationale or "No plausible current Logic Model match was found.",
         )
 
     @staticmethod
@@ -4492,13 +4516,21 @@ class MelvanService:
     def _mapping_is_tentative(confidence: Any) -> bool:
         try:
             value = float(confidence)
-            return (
-                MAPPING_DISPLAY_CONFIDENCE_THRESHOLD
-                <= value
-                < MAPPING_SUPPORTED_CONFIDENCE_THRESHOLD
-            )
+            return 0 <= value < MAPPING_SUPPORTED_CONFIDENCE_THRESHOLD
         except (TypeError, ValueError):
             return False
+
+    @staticmethod
+    def _mapping_confidence_tier(confidence: Any) -> str:
+        try:
+            value = float(confidence)
+        except (TypeError, ValueError):
+            return "supported"
+        if value < MAPPING_DISPLAY_CONFIDENCE_THRESHOLD:
+            return "very_low"
+        if value < MAPPING_SUPPORTED_CONFIDENCE_THRESHOLD:
+            return "low"
+        return "supported"
 
     @staticmethod
     def _apply_authoritative_result(
@@ -4561,17 +4593,9 @@ class MelvanService:
                 ).fetchall()
                 mappings = [dict(row) for row in mapping_rows]
                 for mapping in mappings:
-                    mapping["confidence_tier"] = (
-                        "low"
-                        if self._mapping_is_tentative(mapping.get("confidence"))
-                        else "supported"
+                    mapping["confidence_tier"] = self._mapping_confidence_tier(
+                        mapping.get("confidence")
                     )
-                if statement["status"] == "awaiting_review":
-                    mappings = [
-                        mapping
-                        for mapping in mappings
-                        if self._mapping_confidence_qualifies(mapping.get("confidence"))
-                    ]
         statement["analysis"] = analysis
         statement["mappings"] = mappings
         statement["proposed_element"] = proposed_element
@@ -4814,17 +4838,9 @@ class MelvanService:
             detail = details.get(mapping["id"], {})
             mapping["confidence"] = detail.get("confidence")
             mapping["rationale"] = detail.get("rationale") or ""
-            mapping["confidence_tier"] = (
-                "low"
-                if self._mapping_is_tentative(mapping.get("confidence"))
-                else "supported"
+            mapping["confidence_tier"] = self._mapping_confidence_tier(
+                mapping.get("confidence")
             )
-        if value["status"] == "pending":
-            value["suggested_mappings"] = [
-                mapping
-                for mapping in value["suggested_mappings"]
-                if self._mapping_confidence_qualifies(mapping.get("confidence"))
-            ]
         value.pop("suggested_mapping_ids", None)
         value.pop("suggested_mapping_details", None)
         value["change_set"] = json.loads(value.pop("change_set_json", "[]") or "[]")

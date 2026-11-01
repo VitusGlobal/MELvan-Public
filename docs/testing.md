@@ -41,7 +41,11 @@ npm run test:ui
 
 Browser acceptance must verify visible labels, role-specific navigation,
 responsive layout, voice and photo states, review actions, and PDF visibility.
-Backend tests alone do not close interface requirements.
+For mapping presentation it must also verify descending confidence order, no
+more than two displayed mappings, classification-rationale placement after the
+first mapping or no-match message, Low and Very low confidence treatment,
+retention of omitted mappings in Reviewer controls, and no narrow-screen
+overflow. Backend tests alone do not close interface requirements.
 
 ## Continuous integration
 

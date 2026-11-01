@@ -94,6 +94,21 @@ function makeStatement() {
         confidence_tier: "low",
         rationale: "This is a plausible but uncertain secondary relationship.",
       },
+      {
+        id: "O1",
+        display_id: "O1",
+        logic_model_id: "logic-model-demo-v1",
+        label: "Capacity building support to guide care providers through advancements in PMH completed",
+        element_type: "Output",
+        level: "output",
+        source: "fixture",
+        status: "published",
+        stable_id: "output-1",
+        rank: 3,
+        confidence: 0.3,
+        confidence_tier: "supported",
+        rationale: "This lower-confidence mapping should remain available for editing but not appear in the analysis summary.",
+      },
     ],
     proposed_element: null,
   };
@@ -581,6 +596,25 @@ async function signIn(page, email, password = "Password1!") {
       throw new Error("Review exposes the internal Outcome category letter.");
     }
     await page.locator("#review-list").getByText("Low confidence", { exact: true }).waitFor();
+    const displayedMappingList = page.locator("#review-list .analysis-section .mapping-list").first();
+    if (await displayedMappingList.locator(":scope > .mapping-item").count() !== 2) {
+      throw new Error("Analysis display does not limit mappings to the two highest-confidence results.");
+    }
+    const displayedOrder = await displayedMappingList.locator(":scope > *").evaluateAll((elements) => elements.map((element) => ({
+      className: element.className,
+      text: element.textContent,
+    })));
+    if (!displayedOrder[0]?.text.includes(mo4.label)
+      || !displayedOrder[1]?.className.includes("classification-rationale")
+      || !displayedOrder[2]?.text.includes("Improved precision clinical decision-making")) {
+      throw new Error(`Mappings and classification rationale are not in the required order: ${JSON.stringify(displayedOrder)}`);
+    }
+    if (!displayedOrder[1].text.includes("The Statement describes a change in clinical practice.")) {
+      throw new Error("Classification rationale is not shown immediately after the first mapping.");
+    }
+    if (await displayedMappingList.getByText("Capacity building support to guide care providers through advancements in PMH completed", { exact: true }).count()) {
+      throw new Error("A third mapping is visible in the analysis summary.");
+    }
     const lowMapping = page.locator("#review-list .mapping-item.is-low-confidence");
     if (await lowMapping.count() !== 1) throw new Error("Low-confidence mapping does not have a distinct card treatment.");
     if ((await lowMapping.evaluate((element) => getComputedStyle(element).borderTopStyle)) !== "dashed") {

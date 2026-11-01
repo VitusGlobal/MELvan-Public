@@ -1497,16 +1497,36 @@ function analysisView(statement) {
       <div class="analysis-header"><span class="tag">${escapeHtml(analysis.classification)}</span>${direction}${outcome}<span class="tag tag-confidence">${percent(analysis.classification_confidence)} confidence</span></div>
       <p class="analysis-summary">${escapeHtml(analysis.summary)}</p>
       <p class="analysis-provenance">Logic Model ${escapeHtml(analysis.logic_model_version)}</p>
-      <div class="analysis-grid">
-        <div><h3>${statement.proposed_element ? "Proposed element" : "Logic Model mapping"}</h3><div class="mapping-list">${mappingList(statement)}</div>${analysis.match_status === "no_suitable_match" && analysis.mapping_rationale ? `<p class="mapping-rationale">${escapeHtml(analysis.mapping_rationale)}</p>` : ""}${analysis.match_status === "no_suitable_match" ? `<p class="mapping-guidance">Consider updating the logic model if you think a new output or outcome is necessary.</p>` : ""}</div>
-        <div class="rationale-list"><div><h3>Classification rationale</h3><p>${escapeHtml(analysis.classification_rationale)}</p></div></div>
+      <div class="analysis-flow">
+        <h3>${statement.proposed_element ? "Proposed element" : "Logic Model mapping"}</h3>
+        <div class="mapping-list">${mappingList(statement, analysis.classification_rationale)}</div>
+        ${analysis.match_status === "no_suitable_match" && analysis.mapping_rationale ? `<p class="mapping-rationale">${escapeHtml(analysis.mapping_rationale)}</p>` : ""}
+        ${analysis.match_status === "no_suitable_match" ? `<p class="mapping-guidance">Consider updating the logic model if you think a new output or outcome is necessary.</p>` : ""}
       </div>
     </div>`;
 }
 
-function mappingList(statement) {
-  if (!statement.mappings.length) return `<div class="mapping-item"><span class="mapping-label">No suitable existing match</span></div>`;
-  return statement.mappings.map((mapping) => {
+function displayMappings(mappings) {
+  return [...(mappings || [])]
+    .sort((left, right) => {
+      const leftConfidence = Number.isFinite(Number(left.confidence)) ? Number(left.confidence) : -1;
+      const rightConfidence = Number.isFinite(Number(right.confidence)) ? Number(right.confidence) : -1;
+      if (rightConfidence !== leftConfidence) return rightConfidence - leftConfidence;
+      return Number(left.rank || 0) - Number(right.rank || 0);
+    })
+    .slice(0, 2);
+}
+
+function classificationRationaleView(rationale) {
+  if (!rationale) return "";
+  return `<div class="classification-rationale"><h3>Classification rationale</h3><p>${escapeHtml(rationale)}</p></div>`;
+}
+
+function mappingList(statement, classificationRationale) {
+  const rationale = classificationRationaleView(classificationRationale);
+  const mappings = displayMappings(statement.mappings);
+  if (!mappings.length) return `<div class="mapping-item"><span class="mapping-label">No suitable existing match</span></div>${rationale}`;
+  return mappings.map((mapping, index) => {
     const proposed = mapping.status === "provisional";
     const sourceLabel = proposed ? "MELvan proposal" : mapping.source === "reviewer" ? "Reviewer-created" : levelLabel(mapping.level);
     const confidence = mapping.confidence == null ? "" : `<span class="mapping-confidence">${percent(mapping.confidence)} confidence</span>`;
@@ -1514,7 +1534,8 @@ function mappingList(statement) {
     const lowConfidence = mapping.confidence_tier === "low" || veryLowConfidence;
     const lowTag = lowConfidence ? `<span class="low-confidence-tag"><i data-lucide="triangle-alert" aria-hidden="true"></i>${veryLowConfidence ? "Very low confidence" : "Low confidence"}</span>` : "";
     const rationale = mapping.rationale ? `<p class="mapping-item-rationale">${escapeHtml(mapping.rationale)}</p>` : "";
-    return `<div class="mapping-item ${proposed ? "is-proposed" : ""} ${lowConfidence ? "is-low-confidence" : ""} ${veryLowConfidence ? "is-very-low-confidence" : ""}"><div class="mapping-item-heading"><span class="mapping-label">${escapeHtml(mapping.label)}</span><span class="mapping-confidence-group">${lowTag}${confidence}</span></div><span class="mapping-meta">${escapeHtml(sourceLabel)} · ${escapeHtml(mapping.display_id || mapping.id)}</span>${rationale}</div>`;
+    const mappingView = `<div class="mapping-item ${proposed ? "is-proposed" : ""} ${lowConfidence ? "is-low-confidence" : ""} ${veryLowConfidence ? "is-very-low-confidence" : ""}"><div class="mapping-item-heading"><span class="mapping-label">${escapeHtml(mapping.label)}</span><span class="mapping-confidence-group">${lowTag}${confidence}</span></div><span class="mapping-meta">${escapeHtml(sourceLabel)} · ${escapeHtml(mapping.display_id || mapping.id)}</span>${rationale}</div>`;
+    return index === 0 ? `${mappingView}${classificationRationaleView(classificationRationale)}` : mappingView;
   }).join("");
 }
 
@@ -1627,10 +1648,10 @@ function renderEvidenceReview() {
 
 function evidenceReviewCard(item) {
   const previous = item.accepted_mappings.length
-    ? item.accepted_mappings.map(mappingLine).join("")
+    ? displayMappings(item.accepted_mappings).map(mappingLine).join("")
     : `<p class="muted">No approved mapping</p>`;
   const suggested = item.suggested_mappings.length
-    ? item.suggested_mappings.map(mappingLine).join("")
+    ? displayMappings(item.suggested_mappings).map(mappingLine).join("")
     : `<p class="muted">No mapping suggested</p>`;
   const changes = item.change_set.length
     ? item.change_set.map(changeLine).join("")

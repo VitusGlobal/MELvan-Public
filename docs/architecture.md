@@ -60,6 +60,15 @@ Logic Model drafts autosave but are not used for analysis until committed.
 Activation and rollback create audited state transitions rather than rewriting
 committed versions.
 
+Stored mappings and their user-facing projection are separate. Mapping records
+retain independent confidence, rationale, version, and review provenance.
+Analysis summaries sort them by confidence and show no more than the strongest
+two, placing the classification rationale immediately after the first mapping
+or the no-match message. Logic Model update Evidence review applies the same
+projection independently to accepted and proposed mappings. Reviewer correction
+controls retain all valid choices, so the display limit does not constrain
+authoritative one-to-many Evidence.
+
 The Logic Model and Performance Measurement Framework (PMF) are the two
 program-level sources of truth for relevance, terminology, and mapping. The
 current application implements Logic Model administration and mapping; PMF
@@ -94,6 +103,27 @@ existing node in a committed Logic Model version. When none is suitable, MELvan
 records **No suitable existing match**; it never invents or persists a working
 Output, Outcome, or framework identifier. Only an Administrator can change the
 Logic Model. Review remains the authority boundary.
+
+Mappings at 50% confidence or above are supported. Mappings from 25% inclusive
+to below 50% are visibly **Low confidence**. Sub-25% mappings are normally
+suppressed, but if no plausible candidate reaches 25%, MELvan may retain a
+bounded set of the strongest current-node fallbacks and show no more than two as
+**Very low confidence**. Removing only a Low or Very low confidence mapping is
+score-neutral; the original confidence remains part of learning provenance.
+
+Reporter intent creates a presumption of program relevance, while the content
+still determines classification. MELvan interprets the event already captured
+rather than treating future tense as automatically non-result language. A
+completed decision, commitment, or collaboration may be an Outcome even when
+implementation remains future-facing; merely intended or ongoing work remains
+an Activity.
+
+Structured model output is validated against classification-specific metadata
+and exact current Logic Model identifiers. MELvan may reconcile an unambiguous
+Outcome category/change-type mismatch and make one bounded corrective model
+attempt for a repairable contract violation. A final failure preserves the
+Statement, exposes a diagnostic code, records structured validation details,
+and never activates the invalid analysis.
 
 Voice audio is transient. Accepted photo files use opaque workspace-scoped keys
 and are authorized through their relational Statement records.

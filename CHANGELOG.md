@@ -3,6 +3,20 @@
 This changelog begins with the first reviewed public-release candidate. Private
 development chronology and acceptance records are intentionally excluded.
 
+## 1.2.9 - 2026-11-01
+
+- Displayed no more than the two highest-confidence Logic Model mappings,
+  ordered from highest to lowest confidence, without removing stored mappings.
+- Placed the classification rationale immediately after the first mapping or
+  the no-match message.
+- Applied the same two-mapping presentation rule to Logic Model update Evidence
+  review and improved confidence-label wrapping on narrow screens.
+- Added contract and rendered-browser coverage for ordering, rationale
+  placement, the display limit, and mobile overflow.
+- Documented the stored-versus-displayed mapping boundary, sub-25% fallback
+  exception, tense-sensitive result interpretation, bounded repair, and
+  diagnostic behavior in the stable public product guidance.
+
 ## 1.2.8 - 2026-11-01
 
 - Treated Reporter submissions as presumptively relevant and interpreted

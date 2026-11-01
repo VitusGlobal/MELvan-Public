@@ -14,6 +14,17 @@ LOGO = ROOT / "src" / "melvan" / "static" / "assets" / "melvan-logo.png"
 
 
 class FrontendContractTestCase(unittest.TestCase):
+    def test_analysis_display_limits_and_orders_mappings(self) -> None:
+        self.assertIn("function displayMappings(mappings)", JAVASCRIPT)
+        self.assertIn("rightConfidence - leftConfidence", JAVASCRIPT)
+        self.assertIn(".slice(0, 2)", JAVASCRIPT)
+        self.assertIn("mappingList(statement, analysis.classification_rationale)", JAVASCRIPT)
+        self.assertIn("index === 0", JAVASCRIPT)
+        self.assertIn("classification-rationale", JAVASCRIPT)
+        self.assertIn("displayMappings(item.accepted_mappings)", JAVASCRIPT)
+        self.assertIn("displayMappings(item.suggested_mappings)", JAVASCRIPT)
+        self.assertIn(".classification-rationale", CSS)
+
     def test_low_confidence_mapping_has_visible_non_color_cue(self) -> None:
         self.assertIn("Low confidence", JAVASCRIPT)
         self.assertIn("Very low confidence", JAVASCRIPT)

@@ -1115,10 +1115,9 @@ select[multiple] {
   height: 14px;
 }
 
-.analysis-grid {
+.analysis-flow {
   display: grid;
-  grid-template-columns: minmax(0, 1.3fr) minmax(240px, 0.7fr);
-  gap: 24px;
+  gap: 8px;
 }
 
 .mapping-list {
@@ -1187,12 +1186,15 @@ select[multiple] {
   font-size: 11px;
 }
 
-.rationale-list {
-  display: grid;
-  gap: 13px;
+.classification-rationale {
+  padding: 8px 0 6px;
 }
 
-.rationale-list p {
+.classification-rationale h3 {
+  margin: 0;
+}
+
+.classification-rationale p {
   margin: 4px 0 0;
   color: var(--muted);
   font-size: 13px;
@@ -2785,7 +2787,6 @@ select[multiple] {
     padding: 18px;
   }
 
-  .analysis-grid,
   .comparison-grid,
   .feedback-grid,
   .new-element-fields,
@@ -2878,6 +2879,17 @@ select[multiple] {
 }
 
 @media (max-width: 430px) {
+  .mapping-item-heading {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .mapping-confidence-group {
+    flex-wrap: wrap;
+    justify-content: flex-start;
+  }
+
   .tab {
     font-size: 13px;
     gap: 4px;

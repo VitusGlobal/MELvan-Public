@@ -12,6 +12,22 @@ Performance Measurement Framework (PMF).
 Each mapping has its own confidence and rationale. Outcome results may be
 Positive or Negative; Outputs are neutral.
 
+MELvan treats a Reporter submission as presumptively relevant and interprets
+the important event already captured rather than relying on tense alone. A
+completed decision, commitment, or new collaboration can be an Outcome even if
+later implementation is described in future tense. A Statement that reports
+only intended or ongoing work remains an Activity. Ambiguity is shown through
+confidence and reviewable alternatives rather than an automatic Activity or
+no-match default.
+
+Before an analysis becomes active, MELvan validates classification-specific
+metadata and every mapping identifier against the current Logic Model. It can
+reconcile an unambiguous Outcome category mismatch and make one bounded repair
+attempt for other correctable model-output errors. If repair fails, the
+Statement remains saved and MELvan exposes a diagnostic code while retaining
+structured troubleshooting details; invalid model output is not promoted to an
+active analysis.
+
 A **Reviewer** can accept a correctly mapped Statement, change its
 classification or mappings and accept it, or mark it not relevant to the
 program. A Statement must have at least one approved program-framework mapping before
@@ -82,8 +98,18 @@ the Logic Model as MELvan's only conceptual program framework.
 
 Review queues are newest first and may be filtered by classification or Logic
 Model element. Supported mappings are at least 50% confident. Mappings from 25%
-inclusive to below 50% are visibly tentative; mappings below 25% are suppressed.
-Rejecting only a tentative mapping does not count against MELvan's quality score.
+inclusive to below 50% are visibly **Low confidence**. Mappings below 25% are
+normally suppressed; when no plausible mapping reaches 25%, MELvan may show no
+more than the two strongest current-node fallbacks as **Very low confidence**.
+Rejecting only a Low or Very low confidence mapping does not count against
+MELvan's quality score.
+
+Each user-facing analysis shows at most the two highest-confidence mappings,
+ordered from highest to lowest. The classification rationale follows the first
+mapping, or the no-match message when no mapping exists. This is a presentation
+limit: MELvan retains complete mapping decisions internally for Reviewer
+correction, learning, and audit, and accepted Evidence may still retain an
+authoritative one-to-many mapping.
 
 Reviewer decisions are authoritative. Corrections create an updated analysis
 and can immediately promote the Statement to Evidence. Not-relevant records are

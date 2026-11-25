@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from .auth import SessionStore, build_email_sender
+from .auth import SessionStore
 from .config import Settings
 from .identity import UserDirectory
 from .relational import build_database
@@ -32,7 +32,6 @@ def main() -> int:
         users,
         database,
         pepper=str(settings.auth_pepper),
-        email_sender=build_email_sender(settings),
     )
     credential = sessions.bootstrap_owner()
     print(

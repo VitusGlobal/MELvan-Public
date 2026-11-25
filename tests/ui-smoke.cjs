@@ -204,9 +204,6 @@ async function installRoutes(page) {
       passwordChangeUser = null;
       return route.fulfill({ contentType: "application/json", body: JSON.stringify({ user: session.user, active_role: session.activeRole, requires_password_change: false, requires_role_selection: false }) });
     }
-    if (url.pathname === "/api/auth/recovery" && request.method() === "POST") {
-      return route.fulfill({ status: 202, contentType: "application/json", body: JSON.stringify({ message: "If an account exists for this email address, instructions to reset the password will be sent to it" }) });
-    }
     if (url.pathname === "/api/session" && request.method() === "GET") {
       return route.fulfill({ status: currentUser ? 200 : 401, contentType: "application/json", body: JSON.stringify(currentUser ? { user: currentUser, active_role: activeRole, requires_role_selection: !activeRole } : { error: "Sign in to continue." }) });
     }
@@ -228,6 +225,49 @@ async function installRoutes(page) {
       }
       session.workspaceId = workspaceId;
       return route.fulfill({ contentType: "application/json", body: JSON.stringify({ workspace_id: workspaceId, workspaces }) });
+    }
+    if (url.pathname === "/api/admin/users" && request.method() === "POST") {
+      const body = request.postDataJSON();
+      const created = {
+        id: `user-${Date.now()}`,
+        first_name: body.first_name,
+        last_name: body.last_name,
+        email: body.email,
+        roles: body.roles,
+        status: "active",
+        effective_status: "active",
+        workspace_id: `workspace-${Date.now()}`,
+        workspace_nickname: body.workspace_nickname,
+        password_state: "password_change_required",
+        last_login_at: null,
+        total_logins: 0,
+        statement_count: 0,
+        reviewed_statement_count: 0,
+      };
+      users[created.email] = created;
+      workspaces.push({ id: created.workspace_id, nickname: created.workspace_nickname });
+      return route.fulfill({
+        status: 201,
+        contentType: "application/json",
+        body: JSON.stringify({
+          user: created,
+          credential: { temporary_password: "Temporary1!", expires_at: "2026-07-25T10:00:00+00:00", action: "create" },
+        }),
+      });
+    }
+    const credentialAction = url.pathname.match(/^\/api\/admin\/users\/([^/]+)\/(create|reset)-password$/);
+    if (credentialAction && request.method() === "POST") {
+      const target = Object.values(users).find((item) => item.id === decodeURIComponent(credentialAction[1]));
+      return route.fulfill({
+        contentType: "application/json",
+        body: JSON.stringify({
+          user: target,
+          credential: { temporary_password: "Temporary1!", expires_at: "2026-07-25T10:00:00+00:00", action: credentialAction[2] },
+        }),
+      });
+    }
+    if (/^\/api\/admin\/users\/[^/]+\/credential-handling$/.test(url.pathname) && request.method() === "POST") {
+      return route.fulfill({ contentType: "application/json", body: JSON.stringify({ status: "recorded" }) });
     }
     const ownerWorkspaceUsers = url.pathname.match(/^\/api\/owner\/workspaces\/([^/]+)\/users$/);
     if (ownerWorkspaceUsers && request.method() === "GET") {
@@ -506,12 +546,7 @@ async function signIn(page, email, password = "Password1!") {
     if (denial.active !== "login-password" || denial.statusBox.width > 1 || denial.statusBox.height > 1) {
       throw new Error(`Denied password login did not retain the generic response: ${JSON.stringify(denial)}`);
     }
-    await page.getByRole("button", { name: "Create/reset my password" }).click();
-    await page.getByRole("heading", { name: "Create or reset your password" }).waitFor();
-    await page.getByLabel("Email address").fill("new@example.org");
-    await page.getByRole("button", { name: "Send instructions" }).click();
-    await page.getByText("If an account exists for this email address").waitFor();
-    await page.getByRole("button", { name: "Return to sign in" }).click();
+    if (await page.getByRole("button", { name: "Create/reset my password" }).count()) throw new Error("Public password creation or reset remains visible.");
     await signIn(page, "new@example.org", "Temporary1!");
     await page.getByRole("heading", { name: "Create your password" }).waitFor();
     await page.getByRole("button", { name: "user guide", exact: true }).click();
@@ -882,7 +917,16 @@ async function signIn(page, email, password = "Password1!") {
     await workspaceToggle.click();
     if (await workspacePanel.isVisible()) throw new Error("Workspace users did not collapse.");
     if (await admin.locator("#logic-model-admin-action").isVisible()) throw new Error("Logic Model controls appear on Users.");
-    if (await admin.getByRole("button", { name: /Reset password for/ }).count()) throw new Error("Privileged password reset remains visible.");
+    const resetPassword = admin.getByRole("button", { name: "Reset password for Alex" });
+    await resetPassword.waitFor();
+    admin.once("dialog", (dialog) => dialog.accept());
+    await resetPassword.click();
+    await admin.getByRole("heading", { name: "Temporary password for Alex Administrator" }).waitFor();
+    await admin.getByRole("button", { name: "Copy password" }).waitFor();
+    for (const label of ["Email with Gmail", "Email with Outlook", "Email with default app"]) {
+      await admin.getByRole("link", { name: label }).waitFor();
+    }
+    await admin.getByRole("button", { name: "Close temporary password" }).click();
     const statementsHeading = admin.locator(".users-header > span").filter({ hasText: /^Statements$/ });
     const statementHeadingBox = await statementsHeading.evaluate((element) => element.getBoundingClientRect());
     if (statementHeadingBox.height > 20) throw new Error("Statements heading wraps onto multiple lines.");
@@ -894,6 +938,15 @@ async function signIn(page, email, password = "Password1!") {
     const nicknameRequired = await admin.getByLabel("Workspace nickname").getAttribute("required");
     if (nicknameRequired === null) throw new Error("Workspace nickname is not required.");
     if (await admin.locator('.user-form input[name="access_id"]').count()) throw new Error("New user form still exposes a permanent access ID.");
+    await admin.getByLabel("First name").fill("Casey");
+    await admin.getByLabel("Last name").fill("Administrator");
+    await email.fill("casey@example.org");
+    await admin.getByLabel("Workspace nickname").fill("Coastal pilot");
+    await admin.getByRole("button", { name: "Create administrator" }).click();
+    await admin.getByRole("heading", { name: "Temporary password for Casey Administrator" }).waitFor();
+    await admin.getByText("Temporary1!", { exact: true }).waitFor();
+    if (!String(await admin.getByRole("link", { name: "Email with Gmail" }).getAttribute("href")).includes("casey%40example.org")) throw new Error("Gmail draft does not target the new user.");
+    await admin.getByRole("button", { name: "Close temporary password" }).click();
     await assertNoOverflow(admin, "desktop Users");
     await admin.screenshot({ path: path.join(artifacts, "admin-desktop.png"), fullPage: true });
 

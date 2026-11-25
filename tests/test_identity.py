@@ -3,15 +3,10 @@ from __future__ import annotations
 import json
 import tempfile
 import unittest
+from datetime import timedelta
 from pathlib import Path
 
-from melvan.auth import (
-    AzureCommunicationEmailSender,
-    DevelopmentEmailSender,
-    GENERIC_RECOVERY_MESSAGE,
-    SessionStore,
-    UNSUPERVISED_MAILBOX_NOTICE,
-)
+from melvan.auth import SessionStore, timestamp, utc_now
 from melvan.db import Database, OWNER_WORKSPACE_ID
 from melvan.identity import IdentityError, UserDirectory
 
@@ -31,12 +26,10 @@ class IdentityTestCase(unittest.TestCase):
             initial_owner_email="owner@example.org",
         )
         self.users.initialize()
-        self.sender = DevelopmentEmailSender()
         self.sessions = SessionStore(
             self.users,
             self.database,
             pepper="test-authentication-pepper-value",
-            email_sender=self.sender,
         )
         owner_temporary = self.sessions.bootstrap_owner()["temporary_password"]
         token, _, _, meta = self.sessions.login(
@@ -75,8 +68,10 @@ class IdentityTestCase(unittest.TestCase):
             workspace_id=OWNER_WORKSPACE_ID,
             allow_administrator=allow_administrator,
         )
-        self.sessions.request_recovery(user["email"], request_source=f"test-{user['id']}")
-        return user, self.sender.outbox[-1]
+        temporary = self.sessions.issue_temporary_password(
+            user["id"], actor_id=self.owner["id"], action="create"
+        )
+        return user, temporary
 
     def activate(self, user: dict, temporary: dict, password: str = "ValidPass1!"):
         token, _, _, meta = self.sessions.login(user["email"], temporary["temporary_password"])
@@ -118,11 +113,7 @@ class IdentityTestCase(unittest.TestCase):
         UserDirectory(self.database).initialize()
         self.assertEqual("owner@example.org", self.users.owner()["email"])
 
-    def test_password_email_warns_that_the_mailbox_is_unsupervised(self) -> None:
-        message = AzureCommunicationEmailSender._plain_text("Temporary1!", 7)
-        self.assertTrue(message.endswith(UNSUPERVISED_MAILBOX_NOTICE))
-
-    def test_initial_setup_and_reset_both_send_email(self) -> None:
+    def test_initial_setup_and_reset_issue_one_time_temporary_passwords(self) -> None:
         user = self.sessions.create_user(
             {
                 "first_name": "Email",
@@ -134,51 +125,18 @@ class IdentityTestCase(unittest.TestCase):
             workspace_id=OWNER_WORKSPACE_ID,
             allow_administrator=False,
         )
-        before = len(self.sender.outbox)
-
-        self.sessions.request_recovery(
-            user["email"], request_source="initial-email-test"
+        initial = self.sessions.issue_temporary_password(
+            user["id"], actor_id=self.owner["id"], action="create"
         )
-        self.assertEqual(before + 1, len(self.sender.outbox))
-        initial_message = self.sender.outbox[-1]
-        self.assertEqual(user["email"], initial_message["email"])
-        self.assertEqual("initial_setup", initial_message["purpose"])
+        self.assertEqual("create", initial["action"])
+        self.assertEqual(12, len(initial["temporary_password"]))
 
-        self.activate(user, initial_message, "EmailJourney1!")
-        self.sessions.request_recovery(
-            user["email"], request_source="reset-email-test"
+        self.activate(user, initial, "EmailJourney1!")
+        reset = self.sessions.issue_temporary_password(
+            user["id"], actor_id=self.owner["id"], action="reset"
         )
-        self.assertEqual(before + 2, len(self.sender.outbox))
-        reset_message = self.sender.outbox[-1]
-        self.assertEqual(user["email"], reset_message["email"])
-        self.assertEqual("recovery", reset_message["purpose"])
-
-    def test_azure_sender_uses_configured_mail_from_address(self) -> None:
-        class CompletedSend:
-            def result(self) -> None:
-                return None
-
-        class RecordingClient:
-            def __init__(self) -> None:
-                self.messages: list[dict] = []
-
-            def begin_send(self, message: dict) -> CompletedSend:
-                self.messages.append(message)
-                return CompletedSend()
-
-        sender = AzureCommunicationEmailSender(
-            "https://example.communication.azure.com", "melvan@example.org"
-        )
-        client = RecordingClient()
-        sender._client = client
-        sender.send_temporary_password(
-            "recipient@example.org",
-            "Temporary1!",
-            7,
-            purpose="initial_setup",
-        )
-
-        self.assertEqual("melvan@example.org", client.messages[0]["senderAddress"])
+        self.assertEqual("reset", reset["action"])
+        self.assertNotEqual(initial["temporary_password"], reset["temporary_password"])
 
     def test_legacy_json_is_imported_once_into_owner_workspace_without_pin_credentials(
         self,
@@ -335,10 +293,9 @@ class IdentityTestCase(unittest.TestCase):
             workspace_id=admin["workspace_id"],
             allow_administrator=False,
         )
-        self.sessions.request_recovery(
-            reporter["email"], request_source="workspace-reporter"
+        reporter_temporary = self.sessions.issue_temporary_password(
+            reporter["id"], actor_id=admin["id"], action="create"
         )
-        reporter_temporary = self.sender.outbox[-1]
         reporter_token, _, _, _ = self.activate(
             reporter, reporter_temporary, "ReporterStrong1!"
         )
@@ -355,11 +312,10 @@ class IdentityTestCase(unittest.TestCase):
             with self.assertRaises(IdentityError):
                 self.sessions.resolve(token)
         self.assertIsNone(self.users.find_active_by_email(reporter["email"]))
-        before = len(self.sender.outbox)
-        self.sessions.request_recovery(
-            reporter["email"], request_source="suspended-workspace"
-        )
-        self.assertEqual(before, len(self.sender.outbox))
+        with self.assertRaisesRegex(IdentityError, "active accounts"):
+            self.sessions.issue_temporary_password(
+                reporter["id"], actor_id=admin["id"], action="reset"
+            )
         inherited = self.users.get_user(reporter["id"])
         self.assertEqual("active", inherited["status"])
         self.assertTrue(inherited["inherited_suspension"])
@@ -440,7 +396,7 @@ class IdentityTestCase(unittest.TestCase):
         with self.assertRaisesRegex(IdentityError, "Sign out"):
             self.sessions.assume_role(token, "reviewer")
 
-    def test_three_failures_lock_for_24_hours_and_recovery_clears_lock(self) -> None:
+    def test_three_failures_lock_for_24_hours_and_admin_reset_clears_lock(self) -> None:
         user, temporary = self.create_user()
         self.activate(user, temporary)
         for _ in range(3):
@@ -450,85 +406,80 @@ class IdentityTestCase(unittest.TestCase):
             "temporary_lockout",
             self.sessions.user_lock_statuses()[user["id"]]["status"],
         )
-        result = self.sessions.request_recovery(user["email"], request_source="127.0.0.1")
-        self.assertEqual(GENERIC_RECOVERY_MESSAGE, result["message"])
-        recovery_password = self.sender.outbox[-1]["temporary_password"]
-        token, _, _, meta = self.sessions.login(user["email"], recovery_password)
+        reset = self.sessions.issue_temporary_password(
+            user["id"], actor_id=self.owner["id"], action="reset"
+        )
+        token, _, _, meta = self.sessions.login(
+            user["email"], reset["temporary_password"]
+        )
         self.assertTrue(meta["requires_password_change"])
         self.assertEqual("recovery", meta["password_setup_purpose"])
         self.assertFalse(meta["requires_user_guide_acknowledgement"])
         self.assertNotIn(user["id"], self.sessions.user_lock_statuses())
         self.sessions.change_password(token, "Recovered1!", "Recovered1!")
 
-    def test_known_and_unknown_recovery_responses_are_identical(self) -> None:
-        user, _ = self.create_user()
-        known = self.sessions.request_recovery(user["email"], request_source="one")
-        unknown = self.sessions.request_recovery("unknown@example.org", request_source="two")
-        self.assertEqual(known, unknown)
-        self.assertEqual(GENERIC_RECOVERY_MESSAGE, known["message"])
-
-    def test_failed_recovery_delivery_is_safe_auditable_and_not_usable(self) -> None:
-        class ProviderError:
-            code = "DomainNotLinked"
-
-        class DeliveryError(Exception):
-            status_code = 404
-            error = ProviderError()
-
-        class FailingSender:
-            def send_temporary_password(self, *args, **kwargs) -> None:
-                raise DeliveryError("message containing recipient and credential")
-
-        user = self.sessions.create_user(
-            {
-                "first_name": "Failed",
-                "last_name": "Delivery",
-                "email": "failed@example.org",
-                "roles": ["reporter"],
-            },
-            actor_id=self.owner["id"],
-            workspace_id=OWNER_WORKSPACE_ID,
-            allow_administrator=False,
-        )
-        self.sessions.email_sender = FailingSender()
-        result = self.sessions.request_recovery(
-            user["email"], request_source="failed-delivery-test"
-        )
-        self.assertEqual(GENERIC_RECOVERY_MESSAGE, result["message"])
+    def test_temporary_password_is_hashed_and_audited_without_plaintext(self) -> None:
+        user, credential = self.create_user("audit@example.org")
         with self.database.connection() as connection:
-            credential = connection.execute(
-                """
-                SELECT recovery_salt, recovery_hash, recovery_expires_at
-                FROM users WHERE id = ?
-                """,
+            stored = connection.execute(
+                "SELECT password_salt, password_hash FROM users WHERE id = ?",
                 (user["id"],),
             ).fetchone()
             event = connection.execute(
                 """
                 SELECT outcome, details_json FROM authentication_events
-                WHERE event_type = 'password_recovery_delivery' AND user_id = ?
+                WHERE event_type = 'temporary_password_issued' AND user_id = ?
                 ORDER BY created_at DESC LIMIT 1
                 """,
                 (user["id"],),
             ).fetchone()
-        self.assertIsNone(credential["recovery_salt"])
-        self.assertIsNone(credential["recovery_hash"])
-        self.assertIsNone(credential["recovery_expires_at"])
-        self.assertEqual("delivery_failed", event["outcome"])
-        self.assertEqual(
-            {
-                "provider": "azure",
-                "error_type": "DeliveryError",
-                "status_code": 404,
-                "error_code": "DomainNotLinked",
-            },
-            json.loads(event["details_json"]),
-        )
-        self.assertNotIn(user["email"], event["details_json"])
-        self.assertNotIn("credential", event["details_json"])
+        self.assertTrue(stored["password_salt"])
+        self.assertTrue(stored["password_hash"])
+        self.assertNotIn(credential["temporary_password"], stored["password_hash"])
+        self.assertEqual("revealed_once", event["outcome"])
+        self.assertNotIn(credential["temporary_password"], event["details_json"])
 
-    def test_user_creation_does_not_issue_an_administrative_password(self) -> None:
-        before = len(self.sender.outbox)
+        self.sessions.record_temporary_password_handling(
+            user["id"],
+            actor_id=self.owner["id"],
+            action="create",
+            channel="copy",
+        )
+        with self.database.connection() as connection:
+            handled = connection.execute(
+                """
+                SELECT details_json FROM authentication_events
+                WHERE event_type = 'temporary_password_handled' AND user_id = ?
+                ORDER BY created_at DESC LIMIT 1
+                """,
+                (user["id"],),
+            ).fetchone()
+        self.assertIsNotNone(handled)
+        self.assertIn('"channel": "copy"', handled["details_json"])
+        self.assertNotIn(credential["temporary_password"], handled["details_json"])
+
+    def test_legacy_recovery_hash_cannot_authenticate(self) -> None:
+        user, _ = self.create_user("legacy-recovery@example.org")
+        legacy_password = "LegacyReset1!"
+        salt, password_hash = self.sessions._password_material(legacy_password)
+        with self.database.connection() as connection:
+            connection.execute(
+                """
+                UPDATE users
+                SET recovery_salt = ?, recovery_hash = ?, recovery_expires_at = ?
+                WHERE id = ?
+                """,
+                (
+                    salt,
+                    password_hash,
+                    timestamp(utc_now() + timedelta(days=1)),
+                    user["id"],
+                ),
+            )
+        with self.assertRaises(IdentityError):
+            self.sessions.login(user["email"], legacy_password)
+
+    def test_low_level_user_creation_starts_without_a_password(self) -> None:
         user = self.sessions.create_user(
             {
                 "first_name": "New",
@@ -540,7 +491,6 @@ class IdentityTestCase(unittest.TestCase):
             workspace_id=OWNER_WORKSPACE_ID,
             allow_administrator=False,
         )
-        self.assertEqual(before, len(self.sender.outbox))
         self.assertEqual("bootstrap_required", user["password_state"])
         with self.database.connection() as connection:
             credential = connection.execute(
@@ -585,18 +535,20 @@ class IdentityTestCase(unittest.TestCase):
             json.loads(event["details_json"]),
         )
 
-    def test_self_service_reset_revokes_sessions_after_recovery_use(self) -> None:
+    def test_administrator_reset_revokes_sessions_and_requires_password_replacement(self) -> None:
         user, temporary = self.create_user()
         token, _, _, _ = self.activate(user, temporary)
-        self.sessions.request_recovery(user["email"], request_source="self-service-reset")
-        reset = self.sender.outbox[-1]["temporary_password"]
-        self.assertEqual(user["id"], self.sessions.resolve(token)["id"])
-        replacement, _, _, meta = self.sessions.login(user["email"], reset)
+        reset = self.sessions.issue_temporary_password(
+            user["id"], actor_id=self.owner["id"], action="reset"
+        )
+        with self.assertRaises(IdentityError):
+            self.sessions.resolve(token)
+        replacement, _, _, meta = self.sessions.login(
+            user["email"], reset["temporary_password"]
+        )
         self.assertTrue(meta["requires_password_change"])
         self.assertEqual("recovery", meta["password_setup_purpose"])
         self.assertFalse(meta["requires_user_guide_acknowledgement"])
-        with self.assertRaises(IdentityError):
-            self.sessions.resolve(token)
         self.sessions.change_password(replacement, "ResetPass1!", "ResetPass1!")
 
 

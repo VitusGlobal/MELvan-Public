@@ -22,7 +22,7 @@ accepting Evidence and correcting MELvan's classifications and mappings.
 
 ## Project status
 
-MELvan is pre-1.0 software. The application workflows are operational, and the
+MELvan is version 1.4.0 software. The application workflows are operational, and the
 repository includes local, hosted-demonstration, and PostgreSQL/Blob production
 profiles. These are mutually exclusive: selecting the
 production profile uses PostgreSQL and Blob Storage without creating or opening
@@ -75,8 +75,9 @@ the operator-only bootstrap command to establish the first temporary password:
 PYTHONPATH=src .venv/bin/python -m melvan.bootstrap_owner
 ```
 
-See [Configuration](docs/configuration.md) for live model, email, speech, OCR,
-and persistence settings.
+See [Configuration](docs/configuration.md) for live model, speech, OCR, and
+persistence settings. Owners and Administrators create and reset temporary
+passwords from the Users interface and share them through copy or browser email-draft actions.
 
 ## Test
 

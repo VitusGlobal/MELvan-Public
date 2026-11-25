@@ -95,7 +95,9 @@ class WorkspaceIsolationTestCase(unittest.TestCase):
             self.owner_token,
         )
         self.assertEqual(201, status)
-        token = self._activate(email, self._recovery_password(email), password)
+        token = self._activate(
+            email, created["credential"]["temporary_password"], password
+        )
         return created["user"], token
 
     def _create_workspace_user(
@@ -113,16 +115,9 @@ class WorkspaceIsolationTestCase(unittest.TestCase):
             admin_token,
         )
         self.assertEqual(201, status)
-        return created["user"], self._activate(email, self._recovery_password(email), password)
-
-    def _recovery_password(self, email: str) -> str:
-        status, _ = self.api.dispatch(
-            "POST",
-            "/api/auth/recovery",
-            {"email": email, "request_source": f"workspace-test-{email}"},
+        return created["user"], self._activate(
+            email, created["credential"]["temporary_password"], password
         )
-        self.assertEqual(202, status)
-        return self.api.sessions.email_sender.outbox[-1]["temporary_password"]
 
     def test_administrators_see_only_users_they_created(self) -> None:
         user_a, _ = self._create_workspace_user(

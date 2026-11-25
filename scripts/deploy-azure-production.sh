@@ -17,8 +17,6 @@ required=(
   MELVAN_RESOURCE_GROUP MELVAN_LOCATION MELVAN_APP_NAME
   MELVAN_FOUNDRY_RESOURCE_GROUP MELVAN_FOUNDRY_ACCOUNT
   MELVAN_FOUNDRY_PROJECT_ENDPOINT MELVAN_MODEL
-  MELVAN_COMMUNICATION_RESOURCE_GROUP MELVAN_COMMUNICATION_RESOURCE
-  MELVAN_EMAIL_ENDPOINT MELVAN_EMAIL_SENDER
   MELVAN_INITIAL_ADMIN_EMAIL
 )
 for name in "${required[@]}"; do
@@ -123,7 +121,6 @@ DOCUMENT_INTELLIGENCE_SCOPE="$(deployment_output documentIntelligenceResourceId)
 DOCUMENT_INTELLIGENCE_ENDPOINT="$(deployment_output documentIntelligenceEndpoint)"
 
 FOUNDRY_SCOPE="$(az resource show --resource-group "$MELVAN_FOUNDRY_RESOURCE_GROUP" --name "$MELVAN_FOUNDRY_ACCOUNT" --resource-type Microsoft.CognitiveServices/accounts --query id -o tsv)"
-COMMUNICATION_SCOPE="$(az resource show --resource-group "$MELVAN_COMMUNICATION_RESOURCE_GROUP" --name "$MELVAN_COMMUNICATION_RESOURCE" --resource-type Microsoft.Communication/communicationServices --query id -o tsv)"
 ensure_role() {
   local scope="$1"
   local role="$2"
@@ -142,7 +139,6 @@ ensure_role() {
 ensure_role "$FOUNDRY_SCOPE" "Cognitive Services User"
 ensure_role "$SPEECH_SCOPE" "Cognitive Services Speech User"
 ensure_role "$DOCUMENT_INTELLIGENCE_SCOPE" "Cognitive Services User"
-ensure_role "$COMMUNICATION_SCOPE" Contributor
 
 az acr build --registry "$REGISTRY_NAME" --image "melvan:$IMAGE_TAG" "$ROOT" --output none
 IMAGE="$REGISTRY_SERVER/melvan:$IMAGE_TAG"
@@ -224,8 +220,7 @@ az deployment group create \
     keyVaultName="$KEY_VAULT_NAME" blobAccountUrl="$BLOB_ACCOUNT_URL" \
     blobContainerName="$BLOB_CONTAINER_NAME" \
     foundryProjectEndpoint="$MELVAN_FOUNDRY_PROJECT_ENDPOINT" \
-    modelDeployment="$MELVAN_MODEL" emailEndpoint="$MELVAN_EMAIL_ENDPOINT" \
-    emailSender="$MELVAN_EMAIL_SENDER" speechEndpoint="$SPEECH_ENDPOINT" \
+    modelDeployment="$MELVAN_MODEL" speechEndpoint="$SPEECH_ENDPOINT" \
     documentIntelligenceEndpoint="$DOCUMENT_INTELLIGENCE_ENDPOINT" \
     initialAdminEmail="$MELVAN_INITIAL_ADMIN_EMAIL" \
     minReplicas="$MIN_REPLICAS" maxReplicas="$MAX_REPLICAS" \

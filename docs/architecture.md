@@ -23,7 +23,7 @@ Evidence acceptance, or silent rewriting of historical records.
 - `web.py` exposes the HTTP API and serves the responsive browser application.
 - `service.py` implements Statements, analysis, review, Evidence, Logic Models,
   scoring, and workspace authorization.
-- `identity.py` and `auth.py` implement users, roles, passwords, recovery,
+- `identity.py` and `auth.py` implement users, roles, password replacement,
   lockout, and server-side sessions.
 - `model.py` isolates deterministic, Azure Foundry, and OpenAI-compatible model
   adapters behind one analysis contract.
@@ -154,7 +154,7 @@ Each fork operator is responsible for production topology and capacity,
 availability, monitoring, incident response, backup and disaster recovery,
 data governance, retention, residency, compliance, infrastructure hardening,
 and migration of existing data. The project does not certify those operational
-choices or provide maintained non-Azure deployment patterns. Built-in email and
+choices or provide maintained non-Azure deployment patterns. Built-in
 password authentication is the currently implemented identity system. A future
 external identity-provider adapter must preserve MELvan's role,
 workspace-isolation, session, and audit contracts.

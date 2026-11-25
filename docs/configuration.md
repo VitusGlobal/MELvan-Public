@@ -30,22 +30,17 @@ belong in GitHub variables, Azure managed identity, or Key Vault.
 The deterministic `demo` model is for tests and interface evaluation. It must
 not be mistaken for a quality assessment of a live model.
 
-## Email, speech, and OCR
+## Speech and OCR
 
 | Variable | Purpose |
 | --- | --- |
-| `MELVAN_EMAIL_MODE` | `console` or `azure` |
-| `MELVAN_EMAIL_ENDPOINT`, `MELVAN_EMAIL_SENDER` | Azure Communication Services email endpoint and exact verified MailFrom address |
 | `MELVAN_SPEECH_MODE`, `MELVAN_SPEECH_ENDPOINT` | Voice transcription provider |
 | `MELVAN_SPEECH_LANGUAGE` | Recognition language; defaults to `en-US` |
 | `MELVAN_OCR_MODE`, `MELVAN_OCR_ENDPOINT` | Photo text extraction provider |
 | `MELVAN_OCR_API_VERSION` | Azure Document Intelligence API version |
 
-For recognizable production email, verify a custom Azure Communication
-Services email domain, configure its SPF and DKIM records, and create a
-MailFrom sender username and display name. Set `MELVAN_EMAIL_SENDER` to that
-exact address. Azure-managed domains cannot replace their `DoNotReply` sender
-identity. Each fork supplies its own domain, address, and display name.
+MELvan does not require a transactional-email provider. Account managers share
+one-time temporary passwords through copy or browser email-draft actions.
 
 ## Persistence
 
@@ -81,7 +76,7 @@ MELVAN_BLOB_CONTAINER=melvan-attachments
 
 The migration URL belongs in the trusted migration environment, not the
 ordinary application runtime. Run the database migrations before starting or
-upgrading application replicas. The hosted authentication, provider, email,
+upgrading application replicas. The hosted authentication, provider,
 speech, OCR, and Owner variables remain required independently of the selected
 persistence profile.
 
@@ -109,10 +104,6 @@ original project's account or resource names.
 | `MELVAN_FOUNDRY_ACCOUNT` | Yes | Existing Foundry account |
 | `MELVAN_FOUNDRY_PROJECT_ENDPOINT` | Yes | Foundry project endpoint |
 | `MELVAN_MODEL` | Yes | Foundry model deployment |
-| `MELVAN_COMMUNICATION_RESOURCE_GROUP` | Yes | Communication Services resource group |
-| `MELVAN_COMMUNICATION_RESOURCE` | Yes | Communication Services resource |
-| `MELVAN_EMAIL_ENDPOINT` | Yes | Email service endpoint |
-| `MELVAN_EMAIL_SENDER` | Yes | Exact verified MailFrom sender address |
 | `MELVAN_INITIAL_ADMIN_EMAIL` | Yes | Initial Owner email |
 | `MELVAN_CUSTOM_DOMAIN` | No | Existing verified custom hostname |
 | `MELVAN_POSTGRES_SKU` | No | Production PostgreSQL SKU; defaults to `Standard_B1ms` |

@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.4.0 - 2026-11-25
+
+- Move temporary-password creation and reset into authorized Owner and Administrator user-management workflows.
+- Display each 12-character, seven-day temporary password once with copy, Gmail, Outlook, and default-mail-app sharing actions.
+- Replace rather than recover passwords; reset revokes prior credentials and sessions immediately.
+- Remove the public password request endpoint and Azure Communication Services Email from the maintained runtime and deployment topology.
+- Audit credential issuance and sharing-channel actions without retaining plaintext.
+
 ## 1.3.1 - 2026-11-25
 
 - Verify independently that first-time password setup and password reset both invoke email delivery, with distinct internal purposes and the same account-enumeration-safe public response.

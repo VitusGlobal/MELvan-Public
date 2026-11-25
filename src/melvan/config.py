@@ -44,9 +44,6 @@ class Settings:
     environment: str = "development"
     auth_pepper: str | None = None
     initial_admin_email: str | None = None
-    email_mode: str = "console"
-    email_endpoint: str | None = None
-    email_sender: str | None = None
     public_base_url: str | None = None
     persistent_database_path: Path | None = None
     users_path: Path | None = None
@@ -98,9 +95,6 @@ class Settings:
             raise ValueError(
                 "MELVAN_ATTACHMENT_BACKEND must be local or azure_blob."
             )
-        email_mode = os.getenv("MELVAN_EMAIL_MODE", "console").strip().lower()
-        if email_mode not in {"console", "azure"}:
-            raise ValueError("MELVAN_EMAIL_MODE must be console or azure.")
         speech_mode = os.getenv("MELVAN_SPEECH_MODE", "demo").strip().lower()
         if speech_mode not in {"demo", "azure", "disabled"}:
             raise ValueError("MELVAN_SPEECH_MODE must be demo, azure, or disabled.")
@@ -137,9 +131,6 @@ class Settings:
                 if os.getenv("MELVAN_INITIAL_ADMIN_EMAIL")
                 else None
             ),
-            email_mode=email_mode,
-            email_endpoint=os.getenv("MELVAN_EMAIL_ENDPOINT"),
-            email_sender=os.getenv("MELVAN_EMAIL_SENDER"),
             public_base_url=os.getenv("MELVAN_PUBLIC_BASE_URL"),
             persistent_database_path=(
                 Path(os.environ["MELVAN_PERSISTENT_DATABASE"])
@@ -189,15 +180,6 @@ class Settings:
         if not self.initial_admin_email:
             raise ValueError(
                 "Hosted MELvan requires MELVAN_INITIAL_ADMIN_EMAIL for Owner bootstrap."
-            )
-        if (
-            self.email_mode != "azure"
-            or not self.email_endpoint
-            or not self.email_endpoint.startswith("https://")
-            or not self.email_sender
-        ):
-            raise ValueError(
-                "Hosted MELvan requires Azure email mode, MELVAN_EMAIL_ENDPOINT, and MELVAN_EMAIL_SENDER."
             )
         if not self.public_base_url or not self.public_base_url.startswith("https://"):
             raise ValueError("Hosted MELvan requires an HTTPS MELVAN_PUBLIC_BASE_URL.")

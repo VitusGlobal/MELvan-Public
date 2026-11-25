@@ -7,7 +7,7 @@ import shutil
 import sys
 from pathlib import Path
 
-from .auth import SessionStore, build_email_sender
+from .auth import SessionStore
 from .config import Settings
 from .db import Database
 from .identity import IdentityError
@@ -77,7 +77,6 @@ def main(argv: list[str] | None = None) -> int:
             service.users,
             database,
             pepper=settings.auth_pepper or "melvan-local-development-pepper",
-            email_sender=build_email_sender(settings),
         )
         if args.bootstrap_owner:
             credential = sessions.bootstrap_owner()

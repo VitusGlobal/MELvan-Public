@@ -10,8 +10,6 @@ param keyVaultName string
 param storageLinkName string = '${appName}data'
 param foundryProjectEndpoint string
 param modelDeployment string
-param emailEndpoint string
-param emailSender string
 param speechEndpoint string
 param documentIntelligenceEndpoint string
 @minLength(3)
@@ -101,9 +99,6 @@ resource app 'Microsoft.App/containerApps@2024-03-01' = {
           { name: 'AZURE_CLIENT_ID', value: identity.properties.clientId }
           { name: 'MELVAN_AUTH_PEPPER', secretRef: 'auth-pepper' }
           { name: 'MELVAN_INITIAL_ADMIN_EMAIL', value: initialAdminEmail }
-          { name: 'MELVAN_EMAIL_MODE', value: 'azure' }
-          { name: 'MELVAN_EMAIL_ENDPOINT', value: emailEndpoint }
-          { name: 'MELVAN_EMAIL_SENDER', value: emailSender }
           { name: 'MELVAN_PUBLIC_BASE_URL', value: publicUrl }
         ]
         probes: [

@@ -9,8 +9,6 @@ param identityName string = '${appName}-runtime'
 param keyVaultName string
 param foundryProjectEndpoint string
 param modelDeployment string
-param emailEndpoint string
-param emailSender string
 param speechEndpoint string
 param documentIntelligenceEndpoint string
 param blobAccountUrl string
@@ -119,9 +117,6 @@ resource app 'Microsoft.App/containerApps@2024-03-01' = {
           { name: 'AZURE_CLIENT_ID', value: identity.properties.clientId }
           { name: 'MELVAN_AUTH_PEPPER', secretRef: 'auth-pepper' }
           { name: 'MELVAN_INITIAL_ADMIN_EMAIL', value: initialAdminEmail }
-          { name: 'MELVAN_EMAIL_MODE', value: 'azure' }
-          { name: 'MELVAN_EMAIL_ENDPOINT', value: emailEndpoint }
-          { name: 'MELVAN_EMAIL_SENDER', value: emailSender }
           { name: 'MELVAN_PUBLIC_BASE_URL', value: publicUrl }
         ]
         probes: [

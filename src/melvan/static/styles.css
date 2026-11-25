@@ -1872,7 +1872,6 @@ select[multiple] {
 
 #login-email,
 #login-password,
-#recovery-email,
 #new-password,
 #confirm-password {
   width: 100%;
@@ -2827,6 +2826,66 @@ select[multiple] {
   justify-content: flex-end;
   gap: 10px;
   margin-top: 22px;
+}
+
+.credential-dialog {
+  width: min(620px, calc(100% - 32px));
+}
+
+.credential-dialog-content {
+  padding: 26px;
+}
+
+.credential-dialog-content .eyebrow {
+  margin: 0 0 4px;
+}
+
+.credential-dialog-content h2 {
+  margin: 0;
+}
+
+.credential-value {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 20px 0 10px;
+}
+
+.credential-value code {
+  flex: 1;
+  padding: 14px 16px;
+  border: 1px solid var(--accent);
+  background: var(--surface-soft);
+  color: var(--ink);
+  font-size: 1.25rem;
+  font-weight: 750;
+  letter-spacing: .08em;
+  overflow-wrap: anywhere;
+}
+
+.credential-expiry,
+.credential-note {
+  margin: 8px 0;
+  color: var(--muted);
+}
+
+.credential-share-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 22px 0 14px;
+}
+
+@media (max-width: 620px) {
+  .credential-value {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .credential-share-actions .button {
+    width: 100%;
+    justify-content: center;
+  }
 }
 
 .sr-only {

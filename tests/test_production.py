@@ -31,9 +31,6 @@ class ProductionApplicationTestCase(unittest.TestCase):
             environment="hosted",
             auth_pepper="hosted-test-pepper-value-with-more-than-32-characters",
             initial_admin_email="owner@example.org",
-            email_mode="azure",
-            email_endpoint="https://example.communication.azure.com",
-            email_sender="DoNotReply@example.invalid",
             public_base_url="https://melvan.example.test",
             persistent_database_path=root / "persistent" / "melvan.sqlite3",
             users_path=root / "persistent" / "users.json",
@@ -148,8 +145,8 @@ class ProductionApplicationTestCase(unittest.TestCase):
 
         status, payload, _ = self.call(
             "POST",
-            "/api/auth/recovery",
-            {"email": "owner@example.org"},
+            "/api/session",
+            {"email": "owner@example.org", "password": "WrongPassword1!"},
             origin="https://other.example.test",
         )
         self.assertEqual(403, status)

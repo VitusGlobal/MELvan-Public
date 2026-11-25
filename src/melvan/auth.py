@@ -1,39 +1,27 @@
-"""Password authentication, recovery, and revocable server-side sessions."""
+"""Password authentication and revocable server-side sessions."""
 
 from __future__ import annotations
 
 import hashlib
 import hmac
 import json
-import logging
 import secrets
 import string
 import uuid
 from datetime import datetime, time, timedelta, timezone
-from typing import Any, Protocol
+from typing import Any
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from .config import Settings
 from .db import DatabaseAdapter
 from .identity import IdentityError, UserDirectory
 
 
-LOGGER = logging.getLogger(__name__)
 TEMPORARY_PASSWORD_LENGTH = 12
 TEMPORARY_PASSWORD_DAYS = 7
 PASSWORD_CHANGE_SESSION_MINUTES = 15
 MAX_PASSWORD_ATTEMPTS = 3
 LOCK_HOURS = 24
-MAX_RECOVERY_REQUESTS = 3
-RECOVERY_WINDOW_MINUTES = 15
 GENERIC_LOGIN_ERROR = "Unable to complete sign in."
-GENERIC_RECOVERY_MESSAGE = (
-    "If an account exists for this email address, instructions to reset "
-    "the password will be sent to it"
-)
-UNSUPERVISED_MAILBOX_NOTICE = (
-    "Do not reply to this email. The mailbox is unsupervised."
-)
 SESSION_CHOICES = {"midnight", "7_days", "28_days"}
 USER_GUIDE_VERSION = "2026-08-18"
 COMMON_PASSWORDS = {
@@ -55,99 +43,6 @@ def timestamp(value: datetime) -> str:
     return value.isoformat(timespec="seconds")
 
 
-class EmailSender(Protocol):
-    def send_temporary_password(
-        self,
-        email: str,
-        temporary_password: str,
-        expires_days: int,
-        *,
-        purpose: str,
-    ) -> None: ...
-
-
-class DevelopmentEmailSender:
-    """In-memory delivery used only by local development and tests."""
-
-    def __init__(self) -> None:
-        self.outbox: list[dict[str, str]] = []
-
-    def send_temporary_password(
-        self,
-        email: str,
-        temporary_password: str,
-        expires_days: int,
-        *,
-        purpose: str,
-    ) -> None:
-        self.outbox.append(
-            {
-                "email": email,
-                "temporary_password": temporary_password,
-                "expires_days": str(expires_days),
-                "purpose": purpose,
-            }
-        )
-
-
-class AzureCommunicationEmailSender:
-    """Azure Communication Services sender authenticated with managed identity."""
-
-    def __init__(self, endpoint: str, sender: str):
-        self.endpoint = endpoint
-        self.sender = sender
-        self._client: Any = None
-
-    def send_temporary_password(
-        self,
-        email: str,
-        temporary_password: str,
-        expires_days: int,
-        *,
-        purpose: str,
-    ) -> None:
-        if self._client is None:
-            try:
-                from azure.communication.email import EmailClient
-                from azure.identity import DefaultAzureCredential
-            except ImportError as exc:
-                raise IdentityError(
-                    "Azure email dependencies are not installed.", status=503
-                ) from exc
-            self._client = EmailClient(self.endpoint, DefaultAzureCredential())
-        subject = (
-            "Reset your MELvan password"
-            if purpose == "recovery"
-            else "Your temporary MELvan password"
-        )
-        message = {
-            "senderAddress": self.sender,
-            "recipients": {"to": [{"address": email}]},
-            "content": {
-                "subject": subject,
-                "plainText": self._plain_text(temporary_password, expires_days),
-            },
-        }
-        self._client.begin_send(message).result()
-
-    @staticmethod
-    def _plain_text(temporary_password: str, expires_days: int) -> str:
-        return (
-            f"Your temporary MELvan password is {temporary_password}\n\n"
-            f"It expires in {expires_days} days. Sign in with it, then "
-            "create a new password before continuing.\n\n"
-            f"{UNSUPERVISED_MAILBOX_NOTICE}"
-        )
-
-
-def build_email_sender(settings: Settings) -> EmailSender:
-    if settings.email_mode == "azure":
-        if not settings.email_endpoint or not settings.email_sender:
-            raise ValueError("Azure email mode requires endpoint and sender configuration.")
-        return AzureCommunicationEmailSender(settings.email_endpoint, settings.email_sender)
-    return DevelopmentEmailSender()
-
-
 class SessionStore:
     """Password credentials and sessions persisted in MELvan's database."""
 
@@ -157,14 +52,12 @@ class SessionStore:
         database: DatabaseAdapter,
         *,
         pepper: str,
-        email_sender: EmailSender | None = None,
     ):
         if len(pepper) < 16:
             raise ValueError("Authentication pepper must contain at least 16 characters.")
         self.users = users
         self.database = database
         self.pepper = pepper.encode("utf-8")
-        self.email_sender = email_sender or DevelopmentEmailSender()
 
     def create_user(
         self,
@@ -180,6 +73,93 @@ class SessionStore:
             workspace_id=workspace_id,
             allow_administrator=allow_administrator,
         )
+
+    def issue_temporary_password(
+        self,
+        user_id: str,
+        *,
+        actor_id: str,
+        action: str,
+    ) -> dict[str, str]:
+        if action not in {"create", "reset"}:
+            raise IdentityError("Choose create or reset for the temporary password.")
+        user = self.users.get_user(user_id)
+        if user["status"] != "active" or user.get("effective_status") != "active":
+            raise IdentityError(
+                "Temporary passwords can be issued only for active accounts.", status=409
+            )
+        expected_action = (
+            "create"
+            if user["password_state"] == "bootstrap_required"
+            or int(user.get("total_logins") or 0) == 0
+            else "reset"
+        )
+        if action != expected_action:
+            raise IdentityError(
+                f"This account requires the {expected_action} password action.", status=409
+            )
+        temporary = self._temporary_password()
+        salt, password_hash = self._password_material(temporary)
+        expires_at = timestamp(utc_now() + timedelta(days=TEMPORARY_PASSWORD_DAYS))
+        with self.database.connection() as connection:
+            connection.execute(
+                """
+                UPDATE users
+                SET password_salt = ?, password_hash = ?,
+                    password_state = 'password_change_required',
+                    temporary_password_expires_at = ?,
+                    recovery_salt = NULL, recovery_hash = NULL,
+                    recovery_expires_at = NULL, failed_login_attempts = 0,
+                    updated_at = ?
+                WHERE id = ?
+                """,
+                (salt, password_hash, expires_at, timestamp(utc_now()), user_id),
+            )
+            self._revoke_user_in_connection(connection, user_id)
+            self._clear_lock(connection, user_id)
+            self._event(
+                connection,
+                "temporary_password_issued",
+                user_id,
+                "revealed_once",
+                {
+                    "purpose": "initial_setup" if action == "create" else "recovery",
+                    "action": action,
+                    "actor_id": actor_id,
+                    "expires_at": expires_at,
+                },
+            )
+        return {
+            "temporary_password": temporary,
+            "expires_at": expires_at,
+            "action": action,
+        }
+
+    def record_temporary_password_handling(
+        self,
+        user_id: str,
+        *,
+        actor_id: str,
+        action: str,
+        channel: str,
+    ) -> None:
+        if action not in {"create", "reset"}:
+            raise IdentityError("Choose create or reset for the temporary password.")
+        if channel not in {"copy", "gmail", "outlook", "default_mail_app"}:
+            raise IdentityError("Choose a supported temporary-password sharing option.")
+        self.users.get_user(user_id)
+        with self.database.connection() as connection:
+            self._event(
+                connection,
+                "temporary_password_handled",
+                user_id,
+                "succeeded",
+                {
+                    "action": action,
+                    "actor_id": actor_id,
+                    "channel": channel,
+                },
+            )
 
     def _issue_owner_bootstrap_password(self, user_id: str) -> dict[str, str]:
         user = self.users.get_user(user_id)
@@ -243,19 +223,18 @@ class SessionStore:
         denied = False
         with self.database.connection() as connection:
             row = connection.execute("SELECT * FROM users WHERE id = ?", (user["id"],)).fetchone()
-            recovery_match = self._recovery_matches(row, password, now)
             locked = self._user_is_locked(connection, user["id"], now)
             password_match = self._stored_password_matches(row, password, now)
-            if (locked and not recovery_match) or (not password_match and not recovery_match):
+            if locked or not password_match:
                 self._record_failed_login(connection, user["id"], now)
                 self._event(connection, "password_login", user["id"], "denied", {})
                 denied = True
-            elif recovery_match or row["password_state"] != "active":
-                setup_purpose = self._password_setup_purpose(row)
+            elif row["password_state"] != "active":
                 restricted_expiry = min(
                     now + timedelta(minutes=PASSWORD_CHANGE_SESSION_MINUTES),
                     requested_expiry,
                 )
+                setup_purpose = self._password_setup_purpose(row)
                 token = self._create_session(
                     connection,
                     user,
@@ -268,29 +247,12 @@ class SessionStore:
                     expires_at=restricted_expiry,
                     requested_expires_at=requested_expiry,
                 )
-                if recovery_match:
-                    connection.execute(
-                        """
-                        UPDATE users
-                        SET password_hash = NULL, password_salt = NULL,
-                            password_state = 'password_change_required',
-                            temporary_password_expires_at = NULL,
-                            failed_login_attempts = 0, updated_at = ?
-                        WHERE id = ?
-                        """,
-                        (timestamp(now), user["id"]),
-                    )
-                    self._revoke_user_in_connection(
-                        connection, user["id"], except_token_hash=self._token_hash(token)
-                    )
-                    self._clear_lock(connection, user["id"])
                 self._event(
                     connection,
                     "password_login",
                     user["id"],
                     "password_change_required",
                     {
-                        "recovery": recovery_match,
                         "password_setup_purpose": setup_purpose,
                     },
                 )
@@ -348,8 +310,9 @@ class SessionStore:
         session = self._session_row(token, allow_password_change=True)
         if session["session_kind"] != "password_change":
             raise IdentityError("This session does not require a password change.", status=409)
-        setup_purpose = session.get("password_setup_purpose")
-        if setup_purpose == "initial_setup" and not user_guide_acknowledged:
+        setup_purpose = str(session.get("password_setup_purpose") or "recovery")
+        requires_guide = setup_purpose == "initial_setup"
+        if requires_guide and user_guide_acknowledged is not True:
             raise IdentityError(
                 "Acknowledge that you have read the MELVan User Guide to continue."
             )
@@ -405,10 +368,8 @@ class SessionStore:
                 "succeeded",
                 {
                     "password_setup_purpose": setup_purpose,
-                    "user_guide_acknowledged": setup_purpose == "initial_setup",
-                    "user_guide_version": (
-                        USER_GUIDE_VERSION if setup_purpose == "initial_setup" else None
-                    ),
+                    "user_guide_acknowledged": requires_guide,
+                    "user_guide_version": USER_GUIDE_VERSION if requires_guide else None,
                 },
             )
         user = self.users.record_login(user["id"])
@@ -416,121 +377,6 @@ class SessionStore:
             "expires_at": timestamp(requested_expiry),
             "requires_password_change": False,
             "requires_user_guide_acknowledgement": False,
-        }
-
-    def request_recovery(
-        self, email: str, *, request_source: str = ""
-    ) -> dict[str, str]:
-        normalized = self._safe_email(email)
-        now = utc_now()
-        email_fingerprint = self._fingerprint(normalized)
-        source_fingerprint = self._fingerprint(request_source or "unknown")
-        user = self.users.find_active_by_email(normalized)
-        temporary: str | None = None
-        recovery_hash: str | None = None
-        with self.database.connection() as connection:
-            recent = connection.execute(
-                """
-                SELECT COUNT(*) AS total FROM password_recovery_requests
-                WHERE (email_fingerprint = ? OR request_source_fingerprint = ?)
-                  AND created_at >= ?
-                """,
-                (
-                    email_fingerprint,
-                    source_fingerprint,
-                    timestamp(now - timedelta(minutes=RECOVERY_WINDOW_MINUTES)),
-                ),
-            ).fetchone()["total"]
-            eligible = bool(user and recent < MAX_RECOVERY_REQUESTS)
-            outcome = "suppressed"
-            if eligible:
-                temporary = self._temporary_password()
-                salt, recovery_hash = self._password_material(temporary)
-                expires_at = timestamp(now + timedelta(days=TEMPORARY_PASSWORD_DAYS))
-                connection.execute(
-                    """
-                    UPDATE users
-                    SET recovery_salt = ?, recovery_hash = ?, recovery_expires_at = ?,
-                        updated_at = ?
-                    WHERE id = ?
-                    """,
-                    (salt, recovery_hash, expires_at, timestamp(now), user["id"]),
-                )
-                outcome = "created"
-            connection.execute(
-                """
-                INSERT INTO password_recovery_requests
-                    (id, email_fingerprint, user_id, request_source_fingerprint,
-                     outcome, created_at)
-                VALUES (?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    f"recovery-{uuid.uuid4().hex}",
-                    email_fingerprint,
-                    user["id"] if user else None,
-                    source_fingerprint,
-                    outcome,
-                    timestamp(now),
-                ),
-            )
-            self._event(
-                connection,
-                "password_recovery_requested",
-                user["id"] if user else None,
-                outcome,
-                {},
-            )
-        if temporary and user:
-            try:
-                self.email_sender.send_temporary_password(
-                    user["email"],
-                    temporary,
-                    TEMPORARY_PASSWORD_DAYS,
-                    purpose=(
-                        "initial_setup"
-                        if user["password_state"] == "bootstrap_required"
-                        else "recovery"
-                    ),
-                )
-                delivery = "sent"
-                details: dict[str, Any] = {"provider": "azure"}
-            except Exception as exc:
-                delivery = "delivery_failed"
-                details = self._delivery_error_details(exc)
-                with self.database.connection() as connection:
-                    connection.execute(
-                        """
-                        UPDATE users
-                        SET recovery_salt = NULL, recovery_hash = NULL,
-                            recovery_expires_at = NULL, updated_at = ?
-                        WHERE id = ? AND recovery_hash = ?
-                        """,
-                        (timestamp(utc_now()), user["id"], recovery_hash),
-                    )
-                LOGGER.warning(
-                    "Password recovery email delivery failed: "
-                    "provider=%s error_type=%s status=%s code=%s",
-                    details["provider"],
-                    details["error_type"],
-                    details["status_code"],
-                    details["error_code"],
-                )
-            self._authentication_event(
-                "password_recovery_delivery", user["id"], delivery, details
-            )
-        return {"message": GENERIC_RECOVERY_MESSAGE}
-
-    @staticmethod
-    def _delivery_error_details(exc: Exception) -> dict[str, Any]:
-        provider_error = getattr(exc, "error", None)
-        return {
-            "provider": "azure",
-            "error_type": type(exc).__name__,
-            "status_code": getattr(exc, "status_code", None),
-            "error_code": (
-                getattr(exc, "error_code", None)
-                or getattr(provider_error, "code", None)
-            ),
         }
 
     def resolve(
@@ -699,8 +545,7 @@ class SessionStore:
             INSERT INTO authenticated_sessions
                 (token_hash, user_id, active_role, workspace_id, session_kind,
                  password_setup_purpose, duration_choice, timezone_name,
-                 requested_expires_at,
-                 created_at, expires_at, last_seen_at)
+                 requested_expires_at, created_at, expires_at, last_seen_at)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
@@ -724,10 +569,9 @@ class SessionStore:
     def _password_setup_purpose(row: Any) -> str:
         if row["password_state"] == "bootstrap_required":
             return "initial_setup"
-        if (
-            row["password_state"] == "password_change_required"
-            and int(row["total_logins"] or 0) == 0
-        ):
+        if row["password_state"] == "password_change_required" and int(
+            row["total_logins"] or 0
+        ) == 0:
             return "initial_setup"
         return "recovery"
 
@@ -798,15 +642,6 @@ class SessionStore:
         ):
             return False
         return self._password_matches(row["password_salt"], row["password_hash"], password)
-
-    def _recovery_matches(self, row: Any, password: str, now: datetime) -> bool:
-        return bool(
-            row["recovery_hash"]
-            and row["recovery_salt"]
-            and row["recovery_expires_at"]
-            and row["recovery_expires_at"] > timestamp(now)
-            and self._password_matches(row["recovery_salt"], row["recovery_hash"], password)
-        )
 
     def _password_material(self, password: str) -> tuple[str, str]:
         salt = secrets.token_bytes(16)
@@ -880,14 +715,6 @@ class SessionStore:
 
     def _token_hash(self, token: str) -> str:
         return hmac.new(self.pepper, token.encode("utf-8"), hashlib.sha256).hexdigest()
-
-    def _fingerprint(self, value: str) -> str:
-        return hmac.new(self.pepper, value.encode("utf-8"), hashlib.sha256).hexdigest()
-
-    @staticmethod
-    def _safe_email(email: str) -> str:
-        value = str(email or "").strip().lower()
-        return value[:254]
 
     @staticmethod
     def _revoke_user_in_connection(

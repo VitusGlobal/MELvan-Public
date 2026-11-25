@@ -66,7 +66,7 @@ class HTTPTestCase(unittest.TestCase):
             self.admin_token,
         )
         self.assertEqual(201, status)
-        dual_temporary = self.recovery_password("dana@example.org")
+        dual_temporary = dual_created["credential"]["temporary_password"]
         status, reviewer_created = self.api.dispatch(
             "POST",
             "/api/admin/users",
@@ -79,7 +79,7 @@ class HTTPTestCase(unittest.TestCase):
             self.admin_token,
         )
         self.assertEqual(201, status)
-        reviewer_temporary = self.recovery_password("reva@example.org")
+        reviewer_temporary = reviewer_created["credential"]["temporary_password"]
         status, session = self.login(
             "dana@example.org",
             temporary_password=dual_temporary,
@@ -134,16 +134,6 @@ class HTTPTestCase(unittest.TestCase):
             body,
             self.token if token is None else token,
         )
-
-    def recovery_password(self, email: str) -> str:
-        status, result = self.api.dispatch(
-            "POST",
-            "/api/auth/recovery",
-            {"email": email, "request_source": f"http-test-{email}"},
-        )
-        self.assertEqual(202, status)
-        self.assertIn("If an account exists", result["message"])
-        return self.api.sessions.email_sender.outbox[-1]["temporary_password"]
 
     def login(
         self,
@@ -282,13 +272,14 @@ class HTTPTestCase(unittest.TestCase):
         self.assertIsNotNone(dana["locked_until"])
 
         status, replacement = self.api.dispatch(
-            "POST", "/api/auth/recovery", {"email": "dana@example.org"}
+            "POST",
+            f"/api/admin/users/{dana['id']}/reset-password",
+            {},
+            self.admin_token,
         )
-        self.assertEqual(202, status)
-        self.assertEqual(
-            "If an account exists for this email address, instructions to reset the password will be sent to it",
-            replacement["message"],
-        )
+        self.assertEqual(200, status)
+        self.assertEqual("reset", replacement["credential"]["action"])
+        self.assertNotIn(dana["id"], self.api.sessions.user_lock_statuses())
 
     def test_email_or_role_change_revokes_existing_session(self) -> None:
         dana = self.api.sessions.resolve(self.token)
@@ -631,12 +622,34 @@ class HTTPTestCase(unittest.TestCase):
         self.assertIn("users", admin)
         self.assertEqual([], admin["review"])
         dana = next(user for user in admin["users"] if user["email"] == "dana@example.org")
-        status, _ = self.request(
+        status, replacement = self.request(
             f"/api/admin/users/{dana['id']}/reset-password", {}, self.admin_token
         )
-        self.assertEqual(404, status)
+        self.assertEqual(200, status)
+        self.assertEqual("reset", replacement["credential"]["action"])
+        status, handled = self.request(
+            f"/api/admin/users/{dana['id']}/credential-handling",
+            {"action": "reset", "channel": "gmail"},
+            self.admin_token,
+        )
+        self.assertEqual(200, status)
+        self.assertEqual("recorded", handled["status"])
         status, _ = self.request(
             f"/api/admin/users/{dana['id']}/reset-password", {}, self.reviewer_token
+        )
+        self.assertEqual(403, status)
+        status, _ = self.request(
+            f"/api/admin/users/{dana['id']}/credential-handling",
+            {"action": "reset", "channel": "copy"},
+            self.reviewer_token,
+        )
+        self.assertEqual(403, status)
+        status, _ = self.api.dispatch(
+            "POST", "/api/auth/recovery", {"email": dana["email"]}
+        )
+        self.assertEqual(401, status)
+        status, _ = self.api.dispatch(
+            "POST", "/api/auth/recovery", {"email": dana["email"]}, self.admin_token
         )
         self.assertEqual(404, status)
         status, assessments = self.request(
@@ -648,7 +661,7 @@ class HTTPTestCase(unittest.TestCase):
         self.assertEqual(401, status)
 
     def test_initial_password_requires_user_guide_acknowledgement_over_http(self) -> None:
-        status, _ = self.api.dispatch(
+        status, created = self.api.dispatch(
             "POST",
             "/api/admin/users",
             {
@@ -660,7 +673,8 @@ class HTTPTestCase(unittest.TestCase):
             self.admin_token,
         )
         self.assertEqual(201, status)
-        temporary_password = self.recovery_password("guide@example.org")
+        self.assertEqual("password_change_required", created["user"]["password_state"])
+        temporary_password = created["credential"]["temporary_password"]
         status, restricted = self.api.dispatch(
             "POST",
             "/api/session",

@@ -64,6 +64,7 @@ let recordingStartedAt = 0;
 let recordingTimer = null;
 const MAX_VOICE_SECONDS = 60;
 let cameraStream = null;
+let visibleCredential = null;
 
 document.addEventListener("DOMContentLoaded", async () => {
   bindLogin();
@@ -82,15 +83,19 @@ document.addEventListener("DOMContentLoaded", async () => {
 function bindLogin() {
   const form = $("#login-form");
   form.addEventListener("submit", submitLogin);
-  $("#forgot-password").addEventListener("click", showRecovery);
-  $("#recovery-form").addEventListener("submit", submitRecovery);
-  $$("[data-return-login]").forEach((button) => button.addEventListener("click", showLogin));
   $("#password-form").addEventListener("submit", submitNewPassword);
   $("#open-user-guide").addEventListener("click", openUserGuide);
   $$("[data-close-user-guide]").forEach((button) => button.addEventListener("click", closeUserGuide));
   $("#user-guide-dialog").addEventListener("cancel", (event) => {
     event.preventDefault();
     closeUserGuide();
+  });
+  $("#copy-temporary-password").addEventListener("click", copyTemporaryPassword);
+  $$("[data-credential-share]").forEach((link) => link.addEventListener("click", recordCredentialShare));
+  $$("[data-close-credential]").forEach((button) => button.addEventListener("click", closeTemporaryPassword));
+  $("#temporary-password-dialog").addEventListener("cancel", (event) => {
+    event.preventDefault();
+    closeTemporaryPassword();
   });
 }
 
@@ -146,52 +151,20 @@ function rejectLogin(message = "Unable to complete sign in.") {
   $("#login-password").focus();
 }
 
-function showRecovery() {
+function showPasswordChange(payload = {}) {
   $("#login-screen").hidden = true;
-  $("#password-screen").hidden = true;
   $("#role-screen").hidden = true;
   $("#app-shell").hidden = true;
-  $("#recovery-screen").hidden = false;
-  $("#recovery-status").hidden = true;
-  $("#recovery-email").value = $("#login-email").value;
-  $("#recovery-email").focus();
-}
-
-async function submitRecovery(event) {
-  event.preventDefault();
-  if (loginPending || !event.target.reportValidity()) return;
-  loginPending = true;
-  try {
-    const payload = await api("/api/auth/recovery", {
-      method: "POST",
-      body: { email: event.target.elements.email.value },
-      anonymous: true,
-    });
-    $("#recovery-status").textContent = payload.message;
-    $("#recovery-status").hidden = false;
-  } catch {
-    $("#recovery-status").textContent = "Please try again later.";
-    $("#recovery-status").hidden = false;
-  } finally {
-    loginPending = false;
-  }
-}
-
-function showPasswordChange(payload = {}) {
-  const requiresGuide = Boolean(payload.requires_user_guide_acknowledgement);
+  $("#password-screen").hidden = false;
+  $("#password-status").hidden = true;
   const guideAcknowledgement = $("#password-user-guide-acknowledgement");
   const acknowledgement = $("#user-guide-acknowledged");
+  const requiresGuide = Boolean(payload.requires_user_guide_acknowledgement);
   guideAcknowledgement.hidden = !requiresGuide;
   acknowledgement.required = requiresGuide;
   acknowledgement.checked = false;
   const guideDialog = $("#user-guide-dialog");
   if (guideDialog.open) guideDialog.close();
-  $("#login-screen").hidden = true;
-  $("#recovery-screen").hidden = true;
-  $("#role-screen").hidden = true;
-  $("#app-shell").hidden = true;
-  $("#password-screen").hidden = false;
-  $("#password-status").hidden = true;
   $("#new-password").focus();
 }
 
@@ -208,7 +181,7 @@ async function submitNewPassword(event) {
         password: event.target.elements.password.value,
         confirmation: event.target.elements.confirmation.value,
         user_guide_acknowledged: Boolean(
-          event.target.elements.user_guide_acknowledged.checked
+          event.target.elements.user_guide_acknowledged?.checked
         ),
       },
     });
@@ -318,7 +291,6 @@ async function continueSession(payload) {
 
 function showRoleChoice() {
   $("#login-screen").hidden = true;
-  $("#recovery-screen").hidden = true;
   $("#password-screen").hidden = true;
   $("#app-shell").hidden = true;
   $("#role-screen").hidden = false;
@@ -356,7 +328,6 @@ async function assumeRole(event) {
 
 async function enterApplication() {
   $("#login-screen").hidden = true;
-  $("#recovery-screen").hidden = true;
   $("#password-screen").hidden = true;
   $("#role-screen").hidden = true;
   $("#app-shell").hidden = false;
@@ -368,7 +339,6 @@ async function enterApplication() {
 function showLogin() {
   $("#app-shell").hidden = true;
   $("#role-screen").hidden = true;
-  $("#recovery-screen").hidden = true;
   $("#password-screen").hidden = true;
   $("#login-screen").hidden = false;
   $("#login-status").hidden = true;
@@ -1444,7 +1414,14 @@ function renderAdministratorMetrics() {
   const root = $("#administrator-metrics");
   if (!root || !canViewAdministratorMetrics()) return;
   const metrics = state.administratorMetrics;
-  if (!metrics || !metrics.scored_reviews) {
+  if (!metrics) {
+    root.innerHTML = emptyState(
+      "chart-no-axes-combined",
+      "MELvan performance metrics will appear after the first scored review.",
+    );
+    return;
+  }
+  if (!metrics.scored_reviews) {
     root.innerHTML = emptyState(
       "chart-no-axes-combined",
       "MELvan performance metrics will appear after the first scored review.",
@@ -2086,8 +2063,11 @@ function renderUsers() {
     const workspaceLabel = !ownerHome && isAdmin && !user.roles.includes("owner")
       ? `<small>Workspace: ${escapeHtml(user.workspace_nickname)}</small>`
       : "";
+    const credentialAction = user.password_state === "bootstrap_required" || Number(user.total_logins || 0) === 0 ? "create" : "reset";
+    const credentialLabel = credentialAction === "create" ? "Create password" : "Reset password";
+    const canManagePassword = canAdminister() && user.status === "active" && user.effective_status === "active" && !user.roles.includes("owner") && user.id !== state.user?.id;
     const actions = canAdminister()
-      ? `<span class="row-actions"><button class="icon-button" type="button" data-user-action="edit" aria-label="Edit ${escapeHtml(user.first_name)}" title="Edit user"><i data-lucide="pencil" aria-hidden="true"></i></button>${canSuspend ? `<button class="icon-button" type="button" data-user-action="${user.status === "active" ? "suspend" : "reactivate"}" aria-label="${user.status === "active" ? "Suspend" : "Reactivate"} ${escapeHtml(user.first_name)}" title="${user.status === "active" ? "Suspend" : "Reactivate"} user"><i data-lucide="${user.status === "active" ? "user-x" : "user-check"}" aria-hidden="true"></i></button>` : ""}</span>`
+      ? `<span class="row-actions"><button class="icon-button" type="button" data-user-action="edit" aria-label="Edit ${escapeHtml(user.first_name)}" title="Edit user"><i data-lucide="pencil" aria-hidden="true"></i></button>${canManagePassword ? `<button class="icon-button" type="button" data-user-action="${credentialAction}-password" aria-label="${credentialLabel} for ${escapeHtml(user.first_name)}" title="${credentialLabel}"><i data-lucide="key-round" aria-hidden="true"></i></button>` : ""}${canSuspend ? `<button class="icon-button" type="button" data-user-action="${user.status === "active" ? "suspend" : "reactivate"}" aria-label="${user.status === "active" ? "Suspend" : "Reactivate"} ${escapeHtml(user.first_name)}" title="${user.status === "active" ? "Suspend" : "Reactivate"} user"><i data-lucide="${user.status === "active" ? "user-x" : "user-check"}" aria-hidden="true"></i></button>` : ""}</span>`
       : `<span class="row-actions"></span>`;
     const roleOrWorkspace = ownerHome
       ? user.workspace_nickname
@@ -2211,10 +2191,11 @@ async function submitUserForm(event) {
     body.workspace_nickname = form.elements.workspace_nickname.value;
   }
   try {
-    await api(userId ? `/api/admin/users/${encodeURIComponent(userId)}` : "/api/admin/users", { method: "POST", body });
+    const payload = await api(userId ? `/api/admin/users/${encodeURIComponent(userId)}` : "/api/admin/users", { method: "POST", body });
     $("#user-form-region").hidden = true;
     showToast(userId ? "User updated." : "User created.");
     await refreshData();
+    if (!userId && payload.credential) showTemporaryPassword(payload.user, payload.credential);
   } catch (error) {
     showToast(error.message, true);
   }
@@ -2259,6 +2240,26 @@ async function handleUserClick(event) {
     showUserForm(user);
     return;
   }
+  if (["create-password", "reset-password"].includes(button.dataset.userAction)) {
+    const action = button.dataset.userAction.startsWith("create") ? "create" : "reset";
+    const verb = action === "create" ? "Create" : "Reset";
+    const warning = action === "reset"
+      ? `Reset the password for ${user.first_name} ${user.last_name}? Their current password and active sessions will stop working immediately.`
+      : `Create a temporary password for ${user.first_name} ${user.last_name}?`;
+    if (!window.confirm(warning)) return;
+    button.disabled = true;
+    try {
+      const payload = await api(`/api/admin/users/${encodeURIComponent(user.id)}/${action}-password`, { method: "POST", body: {} });
+      await refreshData();
+      showTemporaryPassword(payload.user, payload.credential);
+      showToast(`${verb} password completed.`);
+    } catch (error) {
+      showToast(error.message, true);
+    } finally {
+      button.disabled = false;
+    }
+    return;
+  }
   const isAdministrator = user.roles.includes("administrator") && !user.roles.includes("owner");
   if (isAdministrator && button.dataset.userAction === "suspend") {
     const confirmed = window.confirm(
@@ -2278,6 +2279,70 @@ async function handleUserClick(event) {
   } catch (error) {
     showToast(error.message, true);
   }
+}
+
+function temporaryPasswordMessage(user, credential) {
+  const action = credential.action === "create" ? "created" : "reset";
+  return `Hello ${user.first_name},\n\nYour MELvan password has been ${action}.\n\nTemporary password: ${credential.temporary_password}\n\nIt expires in 7 days. Sign in to MELvan and create a new password before continuing.`;
+}
+
+function credentialShareUrl(provider, user, credential) {
+  const subject = credential.action === "create" ? "Your MELvan account" : "Your MELvan password reset";
+  const body = temporaryPasswordMessage(user, credential);
+  if (provider === "gmail") {
+    return `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(user.email)}&su=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+  }
+  if (provider === "outlook") {
+    return `https://outlook.office.com/mail/deeplink/compose?to=${encodeURIComponent(user.email)}&subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+  }
+  return `mailto:${encodeURIComponent(user.email)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+}
+
+function showTemporaryPassword(user, credential) {
+  visibleCredential = { user, credential };
+  $("#temporary-password-eyebrow").textContent = credential.action === "create" ? "Password created" : "Password reset";
+  $("#temporary-password-title").textContent = `Temporary password for ${user.first_name} ${user.last_name}`;
+  $("#temporary-password-copy").textContent = `Share this temporary password with ${user.email}. They must replace it when they sign in.`;
+  $("#temporary-password-value").textContent = credential.temporary_password;
+  $("#temporary-password-expiry").textContent = `Expires ${formatDate(credential.expires_at)}.`;
+  $("#email-with-gmail").href = credentialShareUrl("gmail", user, credential);
+  $("#email-with-outlook").href = credentialShareUrl("outlook", user, credential);
+  $("#email-with-default-app").href = credentialShareUrl("default", user, credential);
+  const dialog = $("#temporary-password-dialog");
+  dialog.showModal();
+  refreshIcons();
+  $("#copy-temporary-password").focus();
+}
+
+function closeTemporaryPassword() {
+  const dialog = $("#temporary-password-dialog");
+  if (dialog.open) dialog.close();
+  $("#temporary-password-value").textContent = "";
+  visibleCredential = null;
+}
+
+async function copyTemporaryPassword() {
+  if (!visibleCredential) return;
+  await navigator.clipboard.writeText(visibleCredential.credential.temporary_password);
+  await recordCredentialHandling("copy");
+  showToast("Temporary password copied.");
+}
+
+async function recordCredentialHandling(channel) {
+  if (!visibleCredential) return;
+  try {
+    await api(`/api/admin/users/${encodeURIComponent(visibleCredential.user.id)}/credential-handling`, {
+      method: "POST",
+      body: { action: visibleCredential.credential.action, channel },
+    });
+  } catch (error) {
+    showToast(`The sharing action opened, but MELvan could not record it: ${error.message}`, true);
+  }
+}
+
+function recordCredentialShare(event) {
+  const channel = event.currentTarget.dataset.credentialShare;
+  void recordCredentialHandling(channel);
 }
 
 async function handleReviewClick(event) {

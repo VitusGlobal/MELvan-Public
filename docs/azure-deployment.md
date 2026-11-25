@@ -10,8 +10,8 @@ separate deployment paths:
 - `production` deploys multiple stateless Container Apps replicas with Azure
   Database for PostgreSQL Flexible Server and private Azure Blob Storage.
 
-Both paths use managed identity, Key Vault, Azure AI Foundry, Communication
-Services, Speech, and Document Intelligence.
+Both paths use managed identity, Key Vault, Azure AI Foundry, Speech, and
+Document Intelligence.
 
 The supplied production topology is a maintained deployment baseline, not a
 prescribed or certified production topology. Fork operators remain responsible
@@ -39,7 +39,7 @@ The production deployment workflow and its Bicep templates:
    access.
 4. Stop before deploying the web application if that migration job fails.
 5. Give the web replicas only the runtime database URL and the managed identity
-   used for Blob Storage, model, email, speech, and OCR access.
+   used for Blob Storage, model, speech, and OCR access.
 6. Deploy at least two stateless web replicas with no SQLite or Azure Files
    volume.
 
@@ -70,12 +70,20 @@ configuration](configuration.md#postgresql-only-configuration).
    using the inventory in [Configuration](configuration.md).
 6. Register the Azure resource providers used by Container Apps, Container
    Registry, Key Vault, Managed Identity, Log Analytics, Storage, Cognitive
-   Services, and Communication Services.
+   Services.
 7. Run the preflight and manually start the deployment workflow, choosing
    `hosted_demo` or `production` explicitly.
 
 Forks inherit workflow definitions only. They do not inherit environments,
 variables, secrets, approvals, identities, domains, or Azure resources.
+
+## Temporary-password sharing
+
+MELvan does not require or operate a transactional-email service. Creating a user generates a cryptographically random 12-character temporary password, stores only its strong salted hash, and displays the plaintext once to the responsible Owner or Administrator. An authorized account manager can later reset an eligible account by replacing its current credential with a new temporary password. Passwords are never recovered.
+
+The one-time panel provides **Copy password**, **Email with Gmail**, **Email with Outlook**, and **Email with default app**. Email actions open a pre-addressed draft in the selected user-controlled email service; MELvan does not transmit the message. The account manager is responsible for sharing the temporary password securely. Opening a draft may place the short-lived credential in the browser history or provider compose URL.
+
+A reset immediately invalidates the prior password, unused temporary credentials, active sessions, authentication lock, and failed-attempt count. Temporary passwords expire after seven days and permit only forced password replacement. Initial setup requires User Guide acknowledgement; reset does not repeat onboarding. Issuance and sharing actions are audited without storing plaintext credentials.
 
 ## Deployment
 

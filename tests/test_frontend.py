@@ -41,7 +41,7 @@ class FrontendContractTestCase(unittest.TestCase):
         self.assertIn('autocomplete="username"', HTML)
         self.assertIn('autocomplete="current-password"', HTML)
         self.assertIn("Email address", HTML)
-        self.assertIn("Create/reset my password", HTML)
+        self.assertNotIn("Create/reset my password", HTML)
         self.assertIn("Midnight tonight", HTML)
         self.assertIn("7 days", HTML)
         self.assertIn("28 days", HTML)
@@ -63,7 +63,7 @@ class FrontendContractTestCase(unittest.TestCase):
         self.assertIn("dialog.showModal()", JAVASCRIPT)
         self.assertNotIn(">Continue<", HTML)
         self.assertIn('aria-live="assertive"', HTML)
-        for behavior in ("submitLogin", "submitRecovery", "submitNewPassword", "is-denied"):
+        for behavior in ("submitLogin", "submitNewPassword", "showTemporaryPassword", "is-denied"):
             self.assertIn(behavior, JAVASCRIPT)
         self.assertIn("@keyframes head-no", CSS)
         self.assertIn('id="logout"', HTML)
@@ -76,8 +76,8 @@ class FrontendContractTestCase(unittest.TestCase):
         self.assertIn("function allowedViews()", JAVASCRIPT)
         self.assertIn("function canViewAdministratorMetrics()", JAVASCRIPT)
         self.assertIn('new Set(["logic-model", "about-melvan"])', JAVASCRIPT)
-        self.assertEqual(5, HTML.count('src="/assets/melvan-logo.png"'))
-        self.assertEqual(5, HTML.count("Capture results on the go using AI"))
+        self.assertEqual(4, HTML.count('src="/assets/melvan-logo.png"'))
+        self.assertEqual(4, HTML.count("Capture results on the go using AI"))
         self.assertNotIn("Capture results on the go</small>", HTML)
         self.assertNotIn("Program evidence workspace", HTML)
         self.assertNotIn('class="brand-mark"', HTML)
@@ -261,8 +261,12 @@ class FrontendContractTestCase(unittest.TestCase):
 
     def test_admin_controls_cover_users_and_logic_model_builder(self) -> None:
         self.assertIn("New user", HTML)
-        self.assertNotIn("Temporary password", HTML)
-        self.assertNotIn("reset-password", JAVASCRIPT)
+        self.assertIn("Temporary password", HTML)
+        self.assertIn("reset-password", JAVASCRIPT)
+        self.assertIn("Create password", JAVASCRIPT)
+        self.assertIn("Email with Gmail", HTML)
+        self.assertIn("Email with Outlook", HTML)
+        self.assertNotIn("Create/reset my password", HTML)
         self.assertIn("Temporary lockout", JAVASCRIPT)
         self.assertIn("Suspend", JAVASCRIPT)
         self.assertIn('maxlength="254"', JAVASCRIPT)

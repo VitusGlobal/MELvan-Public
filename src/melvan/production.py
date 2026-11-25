@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Any, Callable, Iterable
 from urllib.parse import urlparse
 
-from .auth import SessionStore, build_email_sender
+from .auth import SessionStore
 from .config import Settings
 from .identity import UserDirectory
 from .media import (
@@ -63,10 +63,6 @@ class ProductionApplication:
             if not isinstance(parsed, dict):
                 return self._json(start_response, HTTPStatus.BAD_REQUEST, {"error": "Request body must be a JSON object."})
             payload = parsed
-        if path == "/api/auth/recovery":
-            payload["request_source"] = str(
-                environ.get("HTTP_X_FORWARDED_FOR") or environ.get("REMOTE_ADDR") or ""
-            ).split(",", 1)[0].strip()
         status, response = self.api.dispatch(
             method,
             path,
@@ -211,6 +207,5 @@ def create_application(settings: Settings | None = None) -> ProductionApplicatio
         service.users,
         database,
         pepper=str(selected.auth_pepper),
-        email_sender=build_email_sender(selected),
     )
     return ProductionApplication(APIApplication(service, sessions=sessions))

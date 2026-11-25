@@ -37,29 +37,7 @@
           <button class="button button-primary login-submit" type="submit">
             <span>Sign in</span>
           </button>
-          <button class="text-button login-back" id="forgot-password" type="button">Create/reset my password</button>
           <p class="sr-only" id="login-status" aria-live="assertive" hidden></p>
-        </form>
-      </section>
-    </main>
-
-    <main class="login-screen" id="recovery-screen" hidden>
-      <section class="login-panel" aria-labelledby="recovery-title">
-        <div class="login-brand">
-          <img class="brand-logo" src="/assets/melvan-logo.png" alt="" width="60" height="60" />
-          <div><strong>MELvan</strong><small>Capture results on the go using AI</small></div>
-        </div>
-        <form id="recovery-form">
-          <p class="eyebrow">Password access</p>
-          <h1 id="recovery-title">Create or reset your password</h1>
-          <p>Enter the email address associated with your account. If it matches an active account, MELvan will email you a temporary password.</p>
-          <div class="field">
-            <label class="field-label" for="recovery-email">Email address</label>
-            <input id="recovery-email" name="email" type="email" maxlength="254" autocomplete="username" required />
-          </div>
-          <button class="button button-primary login-submit" type="submit">Send instructions</button>
-          <button class="text-button login-back" data-return-login type="button">Return to sign in</button>
-          <p class="login-instruction" id="recovery-status" role="status" hidden></p>
         </form>
       </section>
     </main>
@@ -572,6 +550,33 @@
           <button class="button button-primary" value="confirm">Use this version</button>
         </div>
       </form>
+    </dialog>
+    <dialog id="temporary-password-dialog" class="confirm-dialog credential-dialog">
+      <div class="credential-dialog-content">
+        <div class="feedback-heading">
+          <div>
+            <p class="eyebrow" id="temporary-password-eyebrow">Account access</p>
+            <h2 id="temporary-password-title">Temporary password</h2>
+          </div>
+          <button class="icon-button" type="button" data-close-credential aria-label="Close temporary password" title="Close">
+            <i data-lucide="x" aria-hidden="true"></i>
+          </button>
+        </div>
+        <p id="temporary-password-copy"></p>
+        <div class="credential-value">
+          <code id="temporary-password-value"></code>
+          <button class="button" id="copy-temporary-password" type="button">
+            <i data-lucide="copy" aria-hidden="true"></i><span>Copy password</span>
+          </button>
+        </div>
+        <p class="credential-expiry" id="temporary-password-expiry"></p>
+        <div class="credential-share-actions" aria-label="Share temporary password">
+          <a class="button" id="email-with-gmail" data-credential-share="gmail" target="_blank" rel="noopener noreferrer">Email with Gmail</a>
+          <a class="button" id="email-with-outlook" data-credential-share="outlook" target="_blank" rel="noopener noreferrer">Email with Outlook</a>
+          <a class="button" id="email-with-default-app" data-credential-share="default_mail_app">Email with default app</a>
+        </div>
+        <p class="credential-note">This password is shown once. Share it securely, then close this window.</p>
+      </div>
     </dialog>
     <dialog id="edit-context-dialog" class="confirm-dialog context-dialog">
       <form id="edit-context-form">

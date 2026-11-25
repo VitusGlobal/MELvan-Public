@@ -57,11 +57,13 @@ information does not expand the active role's operational permissions.
 
 ## First-time access
 
-An authorized user requests a temporary password from the sign-in screen. When
-creating a permanent password for the first time, the user reads and
-acknowledges the current MELVan User Guide before entering the application. A
-later password recovery requires password replacement but does not repeat the
-onboarding acknowledgement.
+The responsible Owner or Administrator creates an account and receives a
+one-time-displayed temporary password to share with the new user. When creating
+a permanent password for the first time, the user reads and acknowledges the
+current MELVan User Guide before entering the application. Passwords cannot be
+recovered. An authorized account manager can reset an existing account by
+replacing its credential with a new temporary password; reset does not repeat
+the onboarding acknowledgement.
 
 ## Capture
 

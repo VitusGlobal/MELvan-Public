@@ -70,11 +70,6 @@ class APIApplication:
                 )
             if method == "GET" and path == "/api/health":
                 return HTTPStatus.OK, self.service.health()
-            if method == "POST" and path == "/api/auth/recovery":
-                return HTTPStatus.ACCEPTED, self.sessions.request_recovery(
-                    str(body.get("email") or ""),
-                    request_source=str(body.get("request_source") or ""),
-                )
             if method == "POST" and path == "/api/session":
                 session_token, user, active_role, session_meta = self.sessions.login(
                     str(body.get("email") or ""),
@@ -368,7 +363,11 @@ class APIApplication:
                     workspace_id=user["workspace_id"],
                     allow_administrator="owner" in roles,
                 )
-                return HTTPStatus.CREATED, {"user": created}
+                credential = self.sessions.issue_temporary_password(
+                    created["id"], actor_id=user["id"], action="create"
+                )
+                created = self.service.users.get_user(created["id"])
+                return HTTPStatus.CREATED, {"user": created, "credential": credential}
             if method == "GET" and path == "/api/owner/workspaces":
                 self._require_role(roles, "owner")
                 return HTTPStatus.OK, {
@@ -474,6 +473,61 @@ class APIApplication:
                     actor_is_owner="owner" in roles,
                 )
                 return HTTPStatus.OK, {"user": updated_user}
+            credential_match = re.fullmatch(
+                r"/api/admin/users/([^/]+)/(create|reset)-password", path
+            )
+            if method == "POST" and credential_match:
+                self._require_admin(roles)
+                target = self.service.users.get_user(credential_match.group(1))
+                if target["id"] == user["id"] or "owner" in target["roles"]:
+                    raise DomainError(
+                        "Use the deployment bootstrap process for the Owner account.",
+                        status=403,
+                    )
+                manageable_ids = {
+                    item["id"] for item in self._administrator_users(user)
+                }
+                if target["id"] not in manageable_ids:
+                    raise DomainError(
+                        "You can manage passwords only for accounts in your workspace.",
+                        status=403,
+                    )
+                if "owner" in roles:
+                    self._require_owner_administrator_target(target)
+                credential = self.sessions.issue_temporary_password(
+                    target["id"],
+                    actor_id=user["id"],
+                    action=credential_match.group(2),
+                )
+                return HTTPStatus.OK, {"user": target, "credential": credential}
+            credential_handling_match = re.fullmatch(
+                r"/api/admin/users/([^/]+)/credential-handling", path
+            )
+            if method == "POST" and credential_handling_match:
+                self._require_admin(roles)
+                target = self.service.users.get_user(credential_handling_match.group(1))
+                if target["id"] == user["id"] or "owner" in target["roles"]:
+                    raise DomainError(
+                        "Use the deployment bootstrap process for the Owner account.",
+                        status=403,
+                    )
+                manageable_ids = {
+                    item["id"] for item in self._administrator_users(user)
+                }
+                if target["id"] not in manageable_ids:
+                    raise DomainError(
+                        "You can manage passwords only for accounts in your workspace.",
+                        status=403,
+                    )
+                if "owner" in roles:
+                    self._require_owner_administrator_target(target)
+                self.sessions.record_temporary_password_handling(
+                    target["id"],
+                    actor_id=user["id"],
+                    action=str(body.get("action") or ""),
+                    channel=str(body.get("channel") or ""),
+                )
+                return HTTPStatus.OK, {"status": "recorded"}
             if method == "POST" and path == "/api/admin/logic-model-draft/start":
                 self._require_admin(roles)
                 return HTTPStatus.OK, {
@@ -682,8 +736,6 @@ class MelvanRequestHandler(BaseHTTPRequestHandler):
                 self._json(HTTPStatus.FORBIDDEN, {"error": "Cross-origin request denied."})
                 return
             payload = self._request_json()
-            if path == "/api/auth/recovery":
-                payload["request_source"] = self.client_address[0]
             status, response = self.server.api.dispatch(
                 "POST", path, payload, token=self._session_token()
             )

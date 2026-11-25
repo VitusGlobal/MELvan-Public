@@ -122,6 +122,64 @@ class IdentityTestCase(unittest.TestCase):
         message = AzureCommunicationEmailSender._plain_text("Temporary1!", 7)
         self.assertTrue(message.endswith(UNSUPERVISED_MAILBOX_NOTICE))
 
+    def test_initial_setup_and_reset_both_send_email(self) -> None:
+        user = self.sessions.create_user(
+            {
+                "first_name": "Email",
+                "last_name": "Journey",
+                "email": "email-journey@example.org",
+                "roles": ["reporter"],
+            },
+            actor_id=self.owner["id"],
+            workspace_id=OWNER_WORKSPACE_ID,
+            allow_administrator=False,
+        )
+        before = len(self.sender.outbox)
+
+        self.sessions.request_recovery(
+            user["email"], request_source="initial-email-test"
+        )
+        self.assertEqual(before + 1, len(self.sender.outbox))
+        initial_message = self.sender.outbox[-1]
+        self.assertEqual(user["email"], initial_message["email"])
+        self.assertEqual("initial_setup", initial_message["purpose"])
+
+        self.activate(user, initial_message, "EmailJourney1!")
+        self.sessions.request_recovery(
+            user["email"], request_source="reset-email-test"
+        )
+        self.assertEqual(before + 2, len(self.sender.outbox))
+        reset_message = self.sender.outbox[-1]
+        self.assertEqual(user["email"], reset_message["email"])
+        self.assertEqual("recovery", reset_message["purpose"])
+
+    def test_azure_sender_uses_configured_mail_from_address(self) -> None:
+        class CompletedSend:
+            def result(self) -> None:
+                return None
+
+        class RecordingClient:
+            def __init__(self) -> None:
+                self.messages: list[dict] = []
+
+            def begin_send(self, message: dict) -> CompletedSend:
+                self.messages.append(message)
+                return CompletedSend()
+
+        sender = AzureCommunicationEmailSender(
+            "https://example.communication.azure.com", "melvan@example.org"
+        )
+        client = RecordingClient()
+        sender._client = client
+        sender.send_temporary_password(
+            "recipient@example.org",
+            "Temporary1!",
+            7,
+            purpose="initial_setup",
+        )
+
+        self.assertEqual("melvan@example.org", client.messages[0]["senderAddress"])
+
     def test_legacy_json_is_imported_once_into_owner_workspace_without_pin_credentials(
         self,
     ) -> None:

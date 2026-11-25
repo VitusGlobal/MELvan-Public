@@ -35,11 +35,17 @@ not be mistaken for a quality assessment of a live model.
 | Variable | Purpose |
 | --- | --- |
 | `MELVAN_EMAIL_MODE` | `console` or `azure` |
-| `MELVAN_EMAIL_ENDPOINT`, `MELVAN_EMAIL_SENDER` | Azure Communication Services email |
+| `MELVAN_EMAIL_ENDPOINT`, `MELVAN_EMAIL_SENDER` | Azure Communication Services email endpoint and exact verified MailFrom address |
 | `MELVAN_SPEECH_MODE`, `MELVAN_SPEECH_ENDPOINT` | Voice transcription provider |
 | `MELVAN_SPEECH_LANGUAGE` | Recognition language; defaults to `en-US` |
 | `MELVAN_OCR_MODE`, `MELVAN_OCR_ENDPOINT` | Photo text extraction provider |
 | `MELVAN_OCR_API_VERSION` | Azure Document Intelligence API version |
+
+For recognizable production email, verify a custom Azure Communication
+Services email domain, configure its SPF and DKIM records, and create a
+MailFrom sender username and display name. Set `MELVAN_EMAIL_SENDER` to that
+exact address. Azure-managed domains cannot replace their `DoNotReply` sender
+identity. Each fork supplies its own domain, address, and display name.
 
 ## Persistence
 
@@ -106,7 +112,7 @@ original project's account or resource names.
 | `MELVAN_COMMUNICATION_RESOURCE_GROUP` | Yes | Communication Services resource group |
 | `MELVAN_COMMUNICATION_RESOURCE` | Yes | Communication Services resource |
 | `MELVAN_EMAIL_ENDPOINT` | Yes | Email service endpoint |
-| `MELVAN_EMAIL_SENDER` | Yes | Verified sender |
+| `MELVAN_EMAIL_SENDER` | Yes | Exact verified MailFrom sender address |
 | `MELVAN_INITIAL_ADMIN_EMAIL` | Yes | Initial Owner email |
 | `MELVAN_CUSTOM_DOMAIN` | No | Existing verified custom hostname |
 | `MELVAN_POSTGRES_SKU` | No | Production PostgreSQL SKU; defaults to `Standard_B1ms` |

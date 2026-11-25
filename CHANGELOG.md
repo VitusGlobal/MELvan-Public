@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.3.1 - 2026-11-25
+
+- Verify independently that first-time password setup and password reset both invoke email delivery, with distinct internal purposes and the same account-enumeration-safe public response.
+- Verify that Azure Communication Services receives the exact MailFrom address configured through `MELVAN_EMAIL_SENDER`.
+- Document the custom-domain requirement for a branded sender; each deployment configures its own verified MailFrom address and display name.
+
 This changelog begins with the first reviewed public-release candidate. Private
 development chronology and acceptance records are intentionally excluded.
 

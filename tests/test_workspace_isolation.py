@@ -250,6 +250,72 @@ class WorkspaceIsolationTestCase(unittest.TestCase):
             self.assertEqual(403, status)
             self.assertIn("Administrators only", response["error"])
 
+    def test_owner_lazily_lists_read_only_users_for_one_administrator_workspace(
+        self,
+    ) -> None:
+        reporter_a, _ = self._create_workspace_user(
+            self.admin_a_token,
+            "nested-reporter-a@example.org",
+            ["reporter"],
+            "NestedReporterA1!",
+        )
+        dual_a, _ = self._create_workspace_user(
+            self.admin_a_token,
+            "nested-dual-a@example.org",
+            ["reporter", "reviewer"],
+            "NestedDualA1!",
+        )
+        reporter_b, _ = self._create_workspace_user(
+            self.admin_b_token,
+            "nested-reporter-b@example.org",
+            ["reporter"],
+            "NestedReporterB1!",
+        )
+
+        status, result = self.api.dispatch(
+            "GET",
+            f"/api/owner/workspaces/{self.admin_a['workspace_id']}/users",
+            token=self.owner_token,
+        )
+        self.assertEqual(200, status)
+        self.assertEqual(self.admin_a["workspace_id"], result["workspace"]["id"])
+        self.assertEqual("Admin Alpha workspace", result["workspace"]["nickname"])
+        self.assertEqual(
+            {reporter_a["id"], dual_a["id"]},
+            {item["id"] for item in result["users"]},
+        )
+        self.assertNotIn(self.admin_a["id"], {item["id"] for item in result["users"]})
+        self.assertNotIn(reporter_b["id"], {item["id"] for item in result["users"]})
+        returned_dual = next(item for item in result["users"] if item["id"] == dual_a["id"])
+        self.assertCountEqual(["reporter", "reviewer"], returned_dual["roles"])
+        for field in (
+            "last_login_at",
+            "total_logins",
+            "statement_count",
+            "reviewed_statement_count",
+            "authentication_status",
+            "effective_status",
+            "inherited_suspension",
+        ):
+            self.assertIn(field, returned_dual)
+
+        status, response = self.api.dispatch(
+            "GET",
+            f"/api/owner/workspaces/{self.admin_a['workspace_id']}/users",
+            token=self.admin_a_token,
+        )
+        self.assertEqual(403, status)
+        self.assertIn("role", response["error"].lower())
+
+        for workspace_id in ("workspace-owner", "workspace-missing"):
+            status, response = self.api.dispatch(
+                "GET",
+                f"/api/owner/workspaces/{workspace_id}/users",
+                token=self.owner_token,
+            )
+            self.assertEqual(404, status)
+            self.assertEqual("Workspace not found.", response["error"])
+
     def test_owner_edit_preserves_administrator_secondary_roles(self) -> None:
         status, updated = self.api.dispatch(
             "POST",

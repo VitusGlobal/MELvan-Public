@@ -39,6 +39,12 @@ npx playwright install --with-deps chromium firefox
 npm run test:ui
 ```
 
+The Owner journey verifies that Administrator workspace accordions are
+collapsed by default, load users only when expanded, show dual-role and access
+status data once, expose no child-user actions, collapse again, and remain
+usable at supported desktop and narrow widths. Workspace-isolation tests also
+deny non-Owner, Owner-workspace, unknown-workspace, and cross-workspace access.
+
 Browser acceptance must verify visible labels, role-specific navigation,
 responsive layout, voice and photo states, review actions, and PDF visibility.
 For mapping presentation it must also verify descending confidence order, no

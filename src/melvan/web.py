@@ -375,6 +375,14 @@ class APIApplication:
                     "workspaces": self.service.users.list_workspaces(),
                     "workspace_id": user["workspace_id"],
                 }
+            workspace_users_match = re.fullmatch(
+                r"/api/owner/workspaces/([^/]+)/users", path
+            )
+            if method == "GET" and workspace_users_match:
+                self._require_role(roles, "owner")
+                return HTTPStatus.OK, self._owner_workspace_users(
+                    user, workspace_users_match.group(1)
+                )
             if method == "POST" and path == "/api/owner/workspace":
                 self._require_role(roles, "owner")
                 updated = self.sessions.switch_workspace(
@@ -575,7 +583,6 @@ class APIApplication:
             raise DomainError("Your role does not permit this action.", status=403)
 
     def _administrator_users(self, actor: dict[str, Any]) -> list[dict[str, Any]]:
-        locks = self.sessions.user_lock_statuses()
         observer_mode = bool(actor.get("workspace_read_only"))
         observed_administrator_id = None
         if observer_mode:
@@ -602,6 +609,41 @@ class APIApplication:
                     else None
                 ),
             )
+        return self._with_lock_statuses(users)
+
+    def _owner_workspace_users(
+        self, actor: dict[str, Any], workspace_id: str
+    ) -> dict[str, Any]:
+        if actor.get("workspace_read_only"):
+            raise DomainError(
+                "Return to the MELvan workspace to inspect Administrator workspaces.",
+                status=403,
+            )
+        workspace = next(
+            (
+                item
+                for item in self.service.users.list_workspaces()
+                if item["id"] == workspace_id
+                and item["workspace_type"] == "administrator"
+            ),
+            None,
+        )
+        if workspace is None:
+            raise DomainError("Workspace not found.", status=404)
+        with self.service.workspace(workspace_id, read_only=True):
+            users = self.service.list_users()
+        return {
+            "workspace": {
+                "id": workspace["id"],
+                "nickname": workspace["nickname"],
+            },
+            "users": self._with_lock_statuses(users),
+        }
+
+    def _with_lock_statuses(
+        self, users: list[dict[str, Any]]
+    ) -> list[dict[str, Any]]:
+        locks = self.sessions.user_lock_statuses()
         for user in users:
             lock = locks.get(user["id"])
             user["authentication_status"] = lock["status"] if lock else "available"

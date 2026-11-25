@@ -39,6 +39,12 @@ view of all lifetime performance measures for that workspace. An **Owner**
 creates and manages Administrators and may observe their workspaces in read-only
 mode.
 
+On the Owner's **Administrators** page, each Administrator workspace is
+collapsed by default. Expanding it loads that workspace's Reporter, Reviewer,
+and dual-role users and shows their roles, login activity, applicable Statement
+and review totals, lockout state, and effective access status. These nested
+records are read-only; the Owner can act only on the parent Administrator.
+
 The metrics total counts scoring events, split between initial Statement reviews
 and Logic Model update reviews, and is shown alongside the current Evidence
 count. One Evidence record may have an initial score and a later reassessment

@@ -49,6 +49,13 @@ Exactly one Owner creates Administrators. Each Administrator owns one workspace
 and manages its Reporters and Reviewers. Suspending an Administrator also denies
 access to accounts in that workspace without deleting their records.
 
+The Owner's home governance view provides a lazy, read-only user projection for
+each Administrator workspace. An Owner-only endpoint validates the target as an
+Administrator workspace, evaluates the existing user and activity projection
+inside that workspace's database scope, and returns ordinary users without
+duplicating the parent Administrator. The interface exposes no child-user
+mutation controls and does not change the session's selected workspace.
+
 ## Records and versioning
 
 Statements are immutable. Context revisions, analyses, mappings, Logic Model

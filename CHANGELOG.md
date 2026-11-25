@@ -3,6 +3,19 @@
 This changelog begins with the first reviewed public-release candidate. Private
 development chronology and acceptance records are intentionally excluded.
 
+## 1.3.0 - 2026-11-25
+
+- Added an accessible, collapsed workspace accordion beneath each Administrator
+  on the Owner's **Administrators** page.
+- Loaded one validated workspace's Reporter, Reviewer, and dual-role users only
+  when the Owner expands it.
+- Displayed roles, login activity, applicable Statement and review totals,
+  temporary lockout, individual status, and inherited workspace suspension.
+- Kept nested users read-only while preserving the existing parent
+  Administrator edit, suspension, and reactivation controls.
+- Added workspace-isolation, authorization, interface-contract, and rendered
+  browser coverage for the Owner overview.
+
 ## 1.2.9 - 2026-11-01
 
 - Displayed no more than the two highest-confidence Logic Model mappings,

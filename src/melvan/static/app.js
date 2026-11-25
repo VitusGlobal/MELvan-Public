@@ -14,6 +14,7 @@ const state = {
   logicModelDraft: null,
   logicEditing: false,
   users: [],
+  workspaceUsers: {},
   quality: { matches: 0, total: 0, percentage: null },
   reviewSession: null,
   reviewReport: null,
@@ -393,6 +394,7 @@ function clearSession() {
   state.workspaceId = null;
   state.workspaceNickname = null;
   state.workspaceReadOnly = false;
+  state.workspaceUsers = {};
 }
 
 function roles() {
@@ -516,6 +518,7 @@ async function refreshData() {
     state.logicModelVersions = payload.logic_model_versions || [];
     state.logicModelDraft = payload.logic_model_draft || null;
     state.users = payload.users || [];
+    state.workspaceUsers = {};
     state.quality = payload.quality;
     state.reviewSession = payload.review_session || null;
     state.reviewReport = payload.review_report || null;
@@ -2089,9 +2092,65 @@ function renderUsers() {
     const roleOrWorkspace = ownerHome
       ? user.workspace_nickname
       : user.roles.map(titleCase).join(", ");
-    return `<div class="users-row" data-user-id="${escapeHtml(user.id)}"><span><strong>${escapeHtml(user.first_name)} ${escapeHtml(user.last_name)}</strong><small>${escapeHtml(user.email)}</small>${workspaceLabel}</span><span>${escapeHtml(roleOrWorkspace)}</span><span>${user.last_login_at ? escapeHtml(formatDate(user.last_login_at)) : "Never"}</span><span>${escapeHtml(user.total_logins)}</span><span>${escapeHtml(statementCount)}</span><span>${escapeHtml(reviewedCount)}</span>${accessStatus}${actions}</div>`;
+    const panelId = `workspace-users-${user.id}`;
+    const identity = ownerHome
+      ? `<span class="workspace-administrator"><button class="workspace-accordion-toggle" type="button" data-workspace-toggle="${escapeHtml(user.workspace_id)}" data-workspace-nickname="${escapeHtml(user.workspace_nickname)}" aria-expanded="false" aria-controls="${escapeHtml(panelId)}" aria-label="Show users in ${escapeHtml(user.workspace_nickname)}"><i data-lucide="chevron-right" aria-hidden="true"></i></button><span><strong>${escapeHtml(user.first_name)} ${escapeHtml(user.last_name)}</strong><small>${escapeHtml(user.email)}</small></span></span>`
+      : `<span><strong>${escapeHtml(user.first_name)} ${escapeHtml(user.last_name)}</strong><small>${escapeHtml(user.email)}</small>${workspaceLabel}</span>`;
+    const row = `<div class="users-row${ownerHome ? " administrator-row" : ""}" data-user-id="${escapeHtml(user.id)}">${identity}<span>${escapeHtml(roleOrWorkspace)}</span><span>${user.last_login_at ? escapeHtml(formatDate(user.last_login_at)) : "Never"}</span><span>${escapeHtml(user.total_logins)}</span><span>${escapeHtml(statementCount)}</span><span>${escapeHtml(reviewedCount)}</span>${accessStatus}${actions}</div>`;
+    return ownerHome
+      ? `${row}<section class="workspace-users-panel" id="${escapeHtml(panelId)}" aria-label="Users in ${escapeHtml(user.workspace_nickname)}" hidden></section>`
+      : row;
   }).join("")}`;
   refreshIcons();
+}
+
+function userAccessStatus(user) {
+  const locked = user.authentication_status === "temporary_lockout";
+  const inherited = Boolean(user.inherited_suspension);
+  const statusText = inherited ? "Workspace suspended" : titleCase(user.status);
+  return `<span class="status-stack"><span class="status-label ${user.effective_status === "suspended" ? "is-suspended" : ""}">${escapeHtml(statusText)}</span>${locked ? `<span class="status-label is-locked">Temporary lockout</span><small>Until ${escapeHtml(formatDate(user.locked_until))}</small>` : ""}</span>`;
+}
+
+function renderWorkspaceUsersPanel(panel, users, nickname) {
+  if (!users.length) {
+    panel.innerHTML = `<div class="workspace-users-heading"><h3>${escapeHtml(nickname)} users</h3><span>0 users</span></div><p class="workspace-users-state">No Reporter or Reviewer users in this workspace.</p>`;
+    return;
+  }
+  panel.innerHTML = `<div class="workspace-users-heading"><h3>${escapeHtml(nickname)} users</h3><span>${users.length} user${users.length === 1 ? "" : "s"}</span></div><div class="users-row users-header workspace-users-header"><span>User</span><span>Roles</span><span>Last login</span><span>Logins</span><span>Statements</span><span>Reviewed</span><span>Status</span><span class="sr-only">Read only</span></div>${users.map((user) => {
+    const statementCount = user.roles.includes("reporter") ? user.statement_count : "—";
+    const reviewedCount = user.roles.includes("reviewer") ? user.reviewed_statement_count : "—";
+    return `<div class="users-row workspace-user-row" data-workspace-user-id="${escapeHtml(user.id)}"><span><strong>${escapeHtml(user.first_name)} ${escapeHtml(user.last_name)}</strong><small>${escapeHtml(user.email)}</small></span><span>${escapeHtml(user.roles.map(titleCase).join(", "))}</span><span>${user.last_login_at ? escapeHtml(formatDate(user.last_login_at)) : "Never"}</span><span>${escapeHtml(user.total_logins)}</span><span>${escapeHtml(statementCount)}</span><span>${escapeHtml(reviewedCount)}</span>${userAccessStatus(user)}<span class="row-actions" aria-label="Read only"></span></div>`;
+  }).join("")}`;
+}
+
+async function toggleOwnerWorkspaceUsers(button) {
+  const panel = document.getElementById(button.getAttribute("aria-controls"));
+  if (!panel) return;
+  const workspaceId = button.dataset.workspaceToggle;
+  const nickname = button.dataset.workspaceNickname;
+  const expanding = button.getAttribute("aria-expanded") !== "true";
+  button.setAttribute("aria-expanded", String(expanding));
+  button.setAttribute("aria-label", `${expanding ? "Hide" : "Show"} users in ${nickname}`);
+  $("[data-lucide]", button).setAttribute("data-lucide", expanding ? "chevron-down" : "chevron-right");
+  panel.hidden = !expanding;
+  refreshIcons();
+  if (!expanding) return;
+  if (state.workspaceUsers[workspaceId]) {
+    renderWorkspaceUsersPanel(panel, state.workspaceUsers[workspaceId], nickname);
+    return;
+  }
+  panel.innerHTML = `<p class="workspace-users-state" role="status">Loading users...</p>`;
+  button.disabled = true;
+  try {
+    const payload = await api(`/api/owner/workspaces/${encodeURIComponent(workspaceId)}/users`);
+    state.workspaceUsers[workspaceId] = payload.users || [];
+    renderWorkspaceUsersPanel(panel, state.workspaceUsers[workspaceId], payload.workspace?.nickname || nickname);
+  } catch (error) {
+    panel.innerHTML = `<p class="workspace-users-state is-error" role="alert">${escapeHtml(error.message)}</p>`;
+  } finally {
+    button.disabled = false;
+    refreshIcons();
+  }
 }
 
 function showUserForm(user = null) {
@@ -2186,6 +2245,11 @@ async function exportEvidencePDF() {
 }
 
 async function handleUserClick(event) {
+  const workspaceToggle = event.target.closest("[data-workspace-toggle]");
+  if (workspaceToggle && isOwnerHome()) {
+    await toggleOwnerWorkspaceUsers(workspaceToggle);
+    return;
+  }
   if (!canAdminister()) return;
   const button = event.target.closest("[data-user-action]");
   if (!button) return;

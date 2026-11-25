@@ -96,6 +96,12 @@ If the Owner suspends an Administrator, access is also suspended for every accou
 
 The Owner assigns each Administrator workspace a required unique nickname. Nicknames make workspace navigation legible but do not define identity, authorization, ownership, or record relationships; those continue to use immutable internal workspace identifiers.
 
+The Owner can expand an Administrator workspace from the governance view to
+inspect its Reporter and Reviewer accounts and their operational activity. This
+is a lazy, read-only projection of one validated workspace at a time. It does
+not grant the Owner ordinary-user management controls or combine records across
+workspaces.
+
 Authorization determines which records and actions an identity can access. Access is denied by default and enforced by backend operations, workspace-scoped repositories, database constraints, and PostgreSQL row-level security rather than only by the interface. The server derives workspace authority from the session and returns no existence signal for another workspace's identifiers. Users, Logic Models, Statements, Evidence, reviews, exports, scores, and learning memory remain isolated by workspace. Multi-role users choose an active role after identification; changing roles requires sign-out and a new sign-in. Future authentication mechanisms must strengthen rather than bypass this boundary.
 
 ## 13. Ground every instance in shared foundational references

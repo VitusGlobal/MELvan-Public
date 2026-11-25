@@ -229,6 +229,19 @@ async function installRoutes(page) {
       session.workspaceId = workspaceId;
       return route.fulfill({ contentType: "application/json", body: JSON.stringify({ workspace_id: workspaceId, workspaces }) });
     }
+    const ownerWorkspaceUsers = url.pathname.match(/^\/api\/owner\/workspaces\/([^/]+)\/users$/);
+    if (ownerWorkspaceUsers && request.method() === "GET") {
+      const workspaceId = decodeURIComponent(ownerWorkspaceUsers[1]);
+      const workspace = workspaces.find((item) => item.id === workspaceId && item.id !== "workspace-owner");
+      if (activeRole !== "owner" || session.workspaceId !== "workspace-owner") {
+        return route.fulfill({ status: 403, contentType: "application/json", body: JSON.stringify({ error: "Your role does not permit this action." }) });
+      }
+      if (!workspace) {
+        return route.fulfill({ status: 404, contentType: "application/json", body: JSON.stringify({ error: "Workspace not found." }) });
+      }
+      const workspaceUsers = Object.values(users).filter((item) => item.workspace_id === workspaceId && !item.roles.includes("administrator"));
+      return route.fulfill({ contentType: "application/json", body: JSON.stringify({ workspace, users: workspaceUsers }) });
+    }
     if (url.pathname === "/api/bootstrap") {
       if (!currentUser) return route.fulfill({ status: 401, contentType: "application/json", body: JSON.stringify({ error: "Sign in to continue." }) });
       const observer = activeRole === "owner" && session.workspaceId !== "workspace-owner";
@@ -854,6 +867,20 @@ async function signIn(page, email, password = "Password1!") {
     await admin.getByText("Workspace nickname", { exact: true }).waitFor();
     await admin.getByText("Northern pilot", { exact: true }).waitFor();
     if (await admin.getByText("Rita Reporter", { exact: true }).count()) throw new Error("Owner home lists an ordinary workspace user.");
+    const workspaceToggle = admin.getByRole("button", { name: "Show users in Northern pilot" });
+    if (await workspaceToggle.getAttribute("aria-expanded") !== "false") throw new Error("Workspace users are not collapsed by default.");
+    await workspaceToggle.click();
+    if (await workspaceToggle.getAttribute("aria-expanded") !== "true") throw new Error("Workspace users did not expand.");
+    const workspacePanel = admin.getByRole("region", { name: "Users in Northern pilot" });
+    await workspacePanel.getByText("Rita Reporter", { exact: true }).waitFor();
+    await workspacePanel.getByText("Reva Reviewer", { exact: true }).waitFor();
+    await workspacePanel.getByText("Dana Dual", { exact: true }).waitFor();
+    if (await workspacePanel.getByText("Dana Dual", { exact: true }).count() !== 1) throw new Error("Dual-role user is duplicated.");
+    await workspacePanel.getByText("Reporter, Reviewer", { exact: true }).waitFor();
+    await workspacePanel.getByText("Temporary lockout", { exact: true }).waitFor();
+    if (await workspacePanel.locator("[data-user-action]").count()) throw new Error("Owner workspace accordion exposes child-user actions.");
+    await workspaceToggle.click();
+    if (await workspacePanel.isVisible()) throw new Error("Workspace users did not collapse.");
     if (await admin.locator("#logic-model-admin-action").isVisible()) throw new Error("Logic Model controls appear on Users.");
     if (await admin.getByRole("button", { name: /Reset password for/ }).count()) throw new Error("Privileged password reset remains visible.");
     const statementsHeading = admin.locator(".users-header > span").filter({ hasText: /^Statements$/ });

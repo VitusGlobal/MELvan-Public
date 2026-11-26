@@ -63,7 +63,7 @@ class FrontendContractTestCase(unittest.TestCase):
         self.assertIn("dialog.showModal()", JAVASCRIPT)
         self.assertNotIn(">Continue<", HTML)
         self.assertIn('aria-live="assertive"', HTML)
-        for behavior in ("submitLogin", "submitNewPassword", "showTemporaryPassword", "is-denied"):
+        for behavior in ("submitLogin", "submitNewPassword", "showPasswordLink", "is-denied"):
             self.assertIn(behavior, JAVASCRIPT)
         self.assertIn("@keyframes head-no", CSS)
         self.assertIn('id="logout"', HTML)
@@ -261,11 +261,13 @@ class FrontendContractTestCase(unittest.TestCase):
 
     def test_admin_controls_cover_users_and_logic_model_builder(self) -> None:
         self.assertIn("New user", HTML)
-        self.assertIn("Temporary password", HTML)
+        self.assertIn("Password setup link", HTML)
         self.assertIn("reset-password", JAVASCRIPT)
         self.assertIn("Create password", JAVASCRIPT)
-        self.assertIn("Email with Gmail", HTML)
-        self.assertIn("Email with Outlook", HTML)
+        self.assertIn("Send link with Gmail", HTML)
+        self.assertIn("Send link with Outlook", HTML)
+        self.assertIn("Send link with default mail client", HTML)
+        self.assertNotIn("Copy password", HTML)
         self.assertNotIn("Create/reset my password", HTML)
         self.assertIn("Temporary lockout", JAVASCRIPT)
         self.assertIn("Suspend", JAVASCRIPT)

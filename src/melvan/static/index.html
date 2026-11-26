@@ -551,31 +551,25 @@
         </div>
       </form>
     </dialog>
-    <dialog id="temporary-password-dialog" class="confirm-dialog credential-dialog">
+    <dialog id="password-link-dialog" class="confirm-dialog credential-dialog">
       <div class="credential-dialog-content">
         <div class="feedback-heading">
           <div>
-            <p class="eyebrow" id="temporary-password-eyebrow">Account access</p>
-            <h2 id="temporary-password-title">Temporary password</h2>
+            <p class="eyebrow" id="password-link-eyebrow">Account access</p>
+            <h2 id="password-link-title">Password setup link</h2>
           </div>
-          <button class="icon-button" type="button" data-close-credential aria-label="Close temporary password" title="Close">
+          <button class="icon-button" type="button" data-close-password-link aria-label="Close password link" title="Close">
             <i data-lucide="x" aria-hidden="true"></i>
           </button>
         </div>
-        <p id="temporary-password-copy"></p>
-        <div class="credential-value">
-          <code id="temporary-password-value"></code>
-          <button class="button" id="copy-temporary-password" type="button">
-            <i data-lucide="copy" aria-hidden="true"></i><span>Copy password</span>
-          </button>
+        <p id="password-link-copy"></p>
+        <p class="credential-expiry" id="password-link-expiry"></p>
+        <div class="credential-share-actions" aria-label="Send password link">
+          <a class="button" id="email-with-gmail" data-password-link-share="gmail" target="_blank" rel="noopener noreferrer">Send link with Gmail</a>
+          <a class="button" id="email-with-outlook" data-password-link-share="outlook" target="_blank" rel="noopener noreferrer">Send link with Outlook</a>
+          <a class="button" id="email-with-default-app" data-password-link-share="default_mail_app">Send link with default mail client</a>
         </div>
-        <p class="credential-expiry" id="temporary-password-expiry"></p>
-        <div class="credential-share-actions" aria-label="Share temporary password">
-          <a class="button" id="email-with-gmail" data-credential-share="gmail" target="_blank" rel="noopener noreferrer">Email with Gmail</a>
-          <a class="button" id="email-with-outlook" data-credential-share="outlook" target="_blank" rel="noopener noreferrer">Email with Outlook</a>
-          <a class="button" id="email-with-default-app" data-credential-share="default_mail_app">Email with default app</a>
-        </div>
-        <p class="credential-note">This password is shown once. Share it securely, then close this window.</p>
+        <p class="credential-note">This link is shown once and can be used only once. Send it before closing this window.</p>
       </div>
     </dialog>
     <dialog id="edit-context-dialog" class="confirm-dialog context-dialog">

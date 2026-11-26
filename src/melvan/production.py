@@ -72,7 +72,11 @@ class ProductionApplication:
         cookie = None
         if (
             method == "POST"
-            and path in {"/api/session", "/api/session/password"}
+            and path in {
+                "/api/session",
+                "/api/session/password-link",
+                "/api/session/password",
+            }
             and status == HTTPStatus.OK
         ):
             cookie = self._session_cookie(

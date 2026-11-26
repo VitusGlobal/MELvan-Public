@@ -87,6 +87,19 @@ class APIApplication:
                     ),
                     **session_meta,
                 }
+            if method == "POST" and path == "/api/session/password-link":
+                session_token, user, session_meta = self.sessions.exchange_password_link(
+                    str(body.get("token") or ""),
+                    duration_choice=str(body.get("duration") or "midnight"),
+                    timezone_name=str(body.get("timezone") or "UTC"),
+                )
+                return HTTPStatus.OK, {
+                    "token": session_token,
+                    "user": user,
+                    "active_role": None,
+                    "requires_role_selection": False,
+                    **session_meta,
+                }
             if method == "POST" and path == "/api/session/password":
                 session_token, user, active_role, session_meta = self.sessions.change_password(
                     token,
@@ -363,11 +376,14 @@ class APIApplication:
                     workspace_id=user["workspace_id"],
                     allow_administrator="owner" in roles,
                 )
-                credential = self.sessions.issue_temporary_password(
+                password_link = self.sessions.issue_password_link(
                     created["id"], actor_id=user["id"], action="create"
                 )
                 created = self.service.users.get_user(created["id"])
-                return HTTPStatus.CREATED, {"user": created, "credential": credential}
+                return HTTPStatus.CREATED, {
+                    "user": created,
+                    "password_link": password_link,
+                }
             if method == "GET" and path == "/api/owner/workspaces":
                 self._require_role(roles, "owner")
                 return HTTPStatus.OK, {
@@ -494,14 +510,17 @@ class APIApplication:
                     )
                 if "owner" in roles:
                     self._require_owner_administrator_target(target)
-                credential = self.sessions.issue_temporary_password(
+                password_link = self.sessions.issue_password_link(
                     target["id"],
                     actor_id=user["id"],
                     action=credential_match.group(2),
                 )
-                return HTTPStatus.OK, {"user": target, "credential": credential}
+                return HTTPStatus.OK, {
+                    "user": target,
+                    "password_link": password_link,
+                }
             credential_handling_match = re.fullmatch(
-                r"/api/admin/users/([^/]+)/credential-handling", path
+                r"/api/admin/users/([^/]+)/password-link-handling", path
             )
             if method == "POST" and credential_handling_match:
                 self._require_admin(roles)
@@ -521,7 +540,7 @@ class APIApplication:
                     )
                 if "owner" in roles:
                     self._require_owner_administrator_target(target)
-                self.sessions.record_temporary_password_handling(
+                self.sessions.record_password_link_handling(
                     target["id"],
                     actor_id=user["id"],
                     action=str(body.get("action") or ""),
@@ -740,7 +759,11 @@ class MelvanRequestHandler(BaseHTTPRequestHandler):
                 "POST", path, payload, token=self._session_token()
             )
             cookie: str | None = None
-            if path in {"/api/session", "/api/session/password"} and status == HTTPStatus.OK:
+            if path in {
+                "/api/session",
+                "/api/session/password-link",
+                "/api/session/password",
+            } and status == HTTPStatus.OK:
                 token = str(response.pop("token"))
                 cookie = self._session_cookie(
                     token, max_age=self._cookie_max_age(response.get("expires_at"))

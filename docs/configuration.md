@@ -39,8 +39,10 @@ not be mistaken for a quality assessment of a live model.
 | `MELVAN_OCR_MODE`, `MELVAN_OCR_ENDPOINT` | Photo text extraction provider |
 | `MELVAN_OCR_API_VERSION` | Azure Document Intelligence API version |
 
-MELvan does not require a transactional-email provider. Account managers share
-one-time temporary passwords through copy or browser email-draft actions.
+MELvan does not require a transactional-email provider. Account managers send
+single-use setup and reset links through prepared Gmail, Outlook, or
+default-mail-client drafts. MELvan provides no copy action and does not send
+the message.
 
 ## Persistence
 

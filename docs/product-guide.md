@@ -57,13 +57,15 @@ information does not expand the active role's operational permissions.
 
 ## First-time access
 
-The responsible Owner or Administrator creates an account and receives a
-one-time-displayed temporary password to share with the new user. When creating
-a permanent password for the first time, the user reads and acknowledges the
-current MELVan User Guide before entering the application. Passwords cannot be
-recovered. An authorized account manager can reset an existing account by
-replacing its credential with a new temporary password; reset does not repeat
-the onboarding acknowledgement.
+The responsible Owner or Administrator creates an account and sends the new
+user a single-use setup link through a prepared Gmail, Outlook, or
+default-mail-client draft. The link expires after seven days and opens the
+restricted create-password screen directly. The user reads and acknowledges
+the current MELVan User Guide before entering the application. Passwords cannot
+be recovered. An authorized account manager can replace an existing password
+and sessions with a 24-hour, single-use reset link; reset does not repeat the
+onboarding acknowledgement. MELvan stores only link-token hashes and does not
+send the message or provide a copy action.
 
 ## Capture
 

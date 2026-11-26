@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.5.0 - 2026-11-26
+
+- Replaced temporary passwords with purpose-specific, single-use setup and reset links.
+- Expired first-time setup links after seven days and reset links after 24 hours while storing only token hashes.
+- Revoked prior links, passwords, temporary lockouts, and active sessions when an authorized account manager resets a password.
+- Sent users directly to the restricted create-password screen while preserving first-time User Guide acknowledgement.
+- Offered only pre-addressed Gmail, Outlook, and default-mail-client drafts; removed password and link copy actions.
+- Added a replayable PostgreSQL migration and equivalent operator-only Owner setup link.
+
 ## 1.4.0 - 2026-11-25
 
 - Move temporary-password creation and reset into authorized Owner and Administrator user-management workflows.

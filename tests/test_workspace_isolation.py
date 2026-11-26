@@ -26,9 +26,9 @@ class WorkspaceIsolationTestCase(unittest.TestCase):
         )
         self.service.initialize()
         self.api = APIApplication(self.service)
-        temporary = self.api.sessions.bootstrap_owner()["temporary_password"]
+        password_link = self.api.sessions.bootstrap_owner()
         self.owner_token = self._activate(
-            "owner@example.org", temporary, "OwnerStrong1!"
+            password_link, "OwnerStrong1!"
         )
         status, _ = self.api.dispatch(
             "POST", "/api/session/role", {"role": "owner"}, self.owner_token
@@ -52,13 +52,12 @@ class WorkspaceIsolationTestCase(unittest.TestCase):
     def tearDown(self) -> None:
         self.tempdir.cleanup()
 
-    def _activate(self, email: str, temporary: str, replacement: str) -> str:
+    def _activate(self, password_link: dict, replacement: str) -> str:
         status, session = self.api.dispatch(
             "POST",
-            "/api/session",
+            "/api/session/password-link",
             {
-                "email": email,
-                "password": temporary,
+                "token": password_link["token"],
                 "duration": "7_days",
                 "timezone": "UTC",
             },
@@ -96,7 +95,7 @@ class WorkspaceIsolationTestCase(unittest.TestCase):
         )
         self.assertEqual(201, status)
         token = self._activate(
-            email, created["credential"]["temporary_password"], password
+            created["password_link"], password
         )
         return created["user"], token
 
@@ -116,7 +115,7 @@ class WorkspaceIsolationTestCase(unittest.TestCase):
         )
         self.assertEqual(201, status)
         return created["user"], self._activate(
-            email, created["credential"]["temporary_password"], password
+            created["password_link"], password
         )
 
     def test_administrators_see_only_users_they_created(self) -> None:

@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import tempfile
 import unittest
-from datetime import timedelta
+from datetime import datetime, timedelta
 from pathlib import Path
 
 from melvan.auth import SessionStore, timestamp, utc_now
@@ -31,9 +31,9 @@ class IdentityTestCase(unittest.TestCase):
             self.database,
             pepper="test-authentication-pepper-value",
         )
-        owner_temporary = self.sessions.bootstrap_owner()["temporary_password"]
-        token, _, _, meta = self.sessions.login(
-            "owner@example.org", owner_temporary, duration_choice="7_days"
+        owner_link = self.sessions.bootstrap_owner()
+        token, _, meta = self.sessions.exchange_password_link(
+            owner_link["token"], duration_choice="7_days"
         )
         self.assertTrue(meta["requires_password_change"])
         self.owner_token, self.owner, _, _ = self.sessions.change_password(
@@ -68,13 +68,13 @@ class IdentityTestCase(unittest.TestCase):
             workspace_id=OWNER_WORKSPACE_ID,
             allow_administrator=allow_administrator,
         )
-        temporary = self.sessions.issue_temporary_password(
+        password_link = self.sessions.issue_password_link(
             user["id"], actor_id=self.owner["id"], action="create"
         )
-        return user, temporary
+        return user, password_link
 
-    def activate(self, user: dict, temporary: dict, password: str = "ValidPass1!"):
-        token, _, _, meta = self.sessions.login(user["email"], temporary["temporary_password"])
+    def activate(self, user: dict, password_link: dict, password: str = "ValidPass1!"):
+        token, _, meta = self.sessions.exchange_password_link(password_link["token"])
         self.assertTrue(meta["requires_password_change"])
         return self.sessions.change_password(
             token, password, password, user_guide_acknowledged=True
@@ -113,7 +113,7 @@ class IdentityTestCase(unittest.TestCase):
         UserDirectory(self.database).initialize()
         self.assertEqual("owner@example.org", self.users.owner()["email"])
 
-    def test_initial_setup_and_reset_issue_one_time_temporary_passwords(self) -> None:
+    def test_initial_setup_and_reset_issue_distinct_single_use_links(self) -> None:
         user = self.sessions.create_user(
             {
                 "first_name": "Email",
@@ -125,18 +125,26 @@ class IdentityTestCase(unittest.TestCase):
             workspace_id=OWNER_WORKSPACE_ID,
             allow_administrator=False,
         )
-        initial = self.sessions.issue_temporary_password(
+        initial = self.sessions.issue_password_link(
             user["id"], actor_id=self.owner["id"], action="create"
         )
         self.assertEqual("create", initial["action"])
-        self.assertEqual(12, len(initial["temporary_password"]))
+        self.assertGreaterEqual(len(initial["token"]), 43)
+        initial_lifetime = datetime.fromisoformat(initial["expires_at"]) - utc_now()
+        self.assertGreater(initial_lifetime, timedelta(days=6, hours=23))
+        self.assertLessEqual(initial_lifetime, timedelta(days=7))
 
         self.activate(user, initial, "EmailJourney1!")
-        reset = self.sessions.issue_temporary_password(
+        reset = self.sessions.issue_password_link(
             user["id"], actor_id=self.owner["id"], action="reset"
         )
         self.assertEqual("reset", reset["action"])
-        self.assertNotEqual(initial["temporary_password"], reset["temporary_password"])
+        self.assertNotEqual(initial["token"], reset["token"])
+        reset_lifetime = datetime.fromisoformat(reset["expires_at"]) - utc_now()
+        self.assertGreater(reset_lifetime, timedelta(hours=23, minutes=59))
+        self.assertLessEqual(reset_lifetime, timedelta(hours=24))
+        with self.assertRaisesRegex(IdentityError, "invalid or has expired"):
+            self.sessions.exchange_password_link(initial["token"])
 
     def test_legacy_json_is_imported_once_into_owner_workspace_without_pin_credentials(
         self,
@@ -205,7 +213,7 @@ class IdentityTestCase(unittest.TestCase):
             self.assertEqual("reviewer@example.org", users.get_user("legacy-reviewer")["email"])
 
     def test_owner_creates_administrator_with_isolated_workspace(self) -> None:
-        admin, temporary = self.create_user(
+        admin, password_link = self.create_user(
             "admin@example.org",
             ["administrator", "reviewer"],
             allow_administrator=True,
@@ -213,7 +221,7 @@ class IdentityTestCase(unittest.TestCase):
         )
         self.assertNotEqual(OWNER_WORKSPACE_ID, admin["workspace_id"])
         self.assertEqual("bootstrap_required", admin["password_state"])
-        self.assertEqual(12, len(temporary["temporary_password"]))
+        self.assertGreaterEqual(len(password_link["token"]), 43)
         workspaces = {item["id"]: item for item in self.users.list_workspaces()}
         self.assertEqual(admin["id"], workspaces[admin["workspace_id"]]["owner_user_id"])
         self.assertEqual("Northern pilot", workspaces[admin["workspace_id"]]["nickname"])
@@ -293,11 +301,11 @@ class IdentityTestCase(unittest.TestCase):
             workspace_id=admin["workspace_id"],
             allow_administrator=False,
         )
-        reporter_temporary = self.sessions.issue_temporary_password(
+        reporter_link = self.sessions.issue_password_link(
             reporter["id"], actor_id=admin["id"], action="create"
         )
         reporter_token, _, _, _ = self.activate(
-            reporter, reporter_temporary, "ReporterStrong1!"
+            reporter, reporter_link, "ReporterStrong1!"
         )
 
         result = self.users.set_status(
@@ -313,7 +321,7 @@ class IdentityTestCase(unittest.TestCase):
                 self.sessions.resolve(token)
         self.assertIsNone(self.users.find_active_by_email(reporter["email"]))
         with self.assertRaisesRegex(IdentityError, "active accounts"):
-            self.sessions.issue_temporary_password(
+            self.sessions.issue_password_link(
                 reporter["id"], actor_id=admin["id"], action="reset"
             )
         inherited = self.users.get_user(reporter["id"])
@@ -357,10 +365,10 @@ class IdentityTestCase(unittest.TestCase):
             2, json.loads(events[0]["details_json"])["affected_account_count"]
         )
 
-    def test_temporary_password_requires_replacement_and_is_hashed(self) -> None:
-        user, temporary = self.create_user()
-        token, _, _, meta = self.sessions.login(
-            user["email"], temporary["temporary_password"], duration_choice="28_days"
+    def test_password_link_opens_restricted_session_and_permanent_password_is_hashed(self) -> None:
+        user, password_link = self.create_user()
+        token, _, meta = self.sessions.exchange_password_link(
+            password_link["token"], duration_choice="28_days"
         )
         self.assertTrue(meta["requires_password_change"])
         self.assertEqual("initial_setup", meta["password_setup_purpose"])
@@ -387,8 +395,8 @@ class IdentityTestCase(unittest.TestCase):
         self.assertTrue(all(new_token not in item["token_hash"] for item in sessions))
 
     def test_multi_role_session_requires_one_role_and_cannot_switch(self) -> None:
-        user, temporary = self.create_user(roles=["reporter", "reviewer"])
-        token, _, active_role, _ = self.activate(user, temporary)
+        user, password_link = self.create_user(roles=["reporter", "reviewer"])
+        token, _, active_role, _ = self.activate(user, password_link)
         self.assertIsNone(active_role)
         with self.assertRaisesRegex(IdentityError, "Choose what"):
             self.sessions.resolve(token)
@@ -397,8 +405,8 @@ class IdentityTestCase(unittest.TestCase):
             self.sessions.assume_role(token, "reviewer")
 
     def test_three_failures_lock_for_24_hours_and_admin_reset_clears_lock(self) -> None:
-        user, temporary = self.create_user()
-        self.activate(user, temporary)
+        user, password_link = self.create_user()
+        self.activate(user, password_link)
         for _ in range(3):
             with self.assertRaises(IdentityError):
                 self.sessions.login(user["email"], "WrongPassword1!")
@@ -406,57 +414,62 @@ class IdentityTestCase(unittest.TestCase):
             "temporary_lockout",
             self.sessions.user_lock_statuses()[user["id"]]["status"],
         )
-        reset = self.sessions.issue_temporary_password(
+        reset = self.sessions.issue_password_link(
             user["id"], actor_id=self.owner["id"], action="reset"
         )
-        token, _, _, meta = self.sessions.login(
-            user["email"], reset["temporary_password"]
-        )
+        token, _, meta = self.sessions.exchange_password_link(reset["token"])
         self.assertTrue(meta["requires_password_change"])
         self.assertEqual("recovery", meta["password_setup_purpose"])
         self.assertFalse(meta["requires_user_guide_acknowledgement"])
         self.assertNotIn(user["id"], self.sessions.user_lock_statuses())
         self.sessions.change_password(token, "Recovered1!", "Recovered1!")
 
-    def test_temporary_password_is_hashed_and_audited_without_plaintext(self) -> None:
-        user, credential = self.create_user("audit@example.org")
+    def test_password_link_is_hashed_and_audited_without_plaintext(self) -> None:
+        user, password_link = self.create_user("audit@example.org")
         with self.database.connection() as connection:
             stored = connection.execute(
-                "SELECT password_salt, password_hash FROM users WHERE id = ?",
+                "SELECT token_hash FROM password_setup_links WHERE user_id = ?",
                 (user["id"],),
             ).fetchone()
             event = connection.execute(
                 """
                 SELECT outcome, details_json FROM authentication_events
-                WHERE event_type = 'temporary_password_issued' AND user_id = ?
+                WHERE event_type = 'password_setup_link_issued' AND user_id = ?
                 ORDER BY created_at DESC LIMIT 1
                 """,
                 (user["id"],),
             ).fetchone()
-        self.assertTrue(stored["password_salt"])
-        self.assertTrue(stored["password_hash"])
-        self.assertNotIn(credential["temporary_password"], stored["password_hash"])
+        self.assertTrue(stored["token_hash"])
+        self.assertNotIn(password_link["token"], stored["token_hash"])
         self.assertEqual("revealed_once", event["outcome"])
-        self.assertNotIn(credential["temporary_password"], event["details_json"])
+        self.assertNotIn(password_link["token"], event["details_json"])
 
-        self.sessions.record_temporary_password_handling(
+        self.sessions.record_password_link_handling(
             user["id"],
             actor_id=self.owner["id"],
             action="create",
-            channel="copy",
+            channel="gmail",
         )
         with self.database.connection() as connection:
             handled = connection.execute(
                 """
                 SELECT details_json FROM authentication_events
-                WHERE event_type = 'temporary_password_handled' AND user_id = ?
+                WHERE event_type = 'password_setup_link_shared' AND user_id = ?
                 ORDER BY created_at DESC LIMIT 1
                 """,
                 (user["id"],),
             ).fetchone()
         self.assertIsNotNone(handled)
-        self.assertIn('"channel": "copy"', handled["details_json"])
-        self.assertNotIn(credential["temporary_password"], handled["details_json"])
+        self.assertIn('"channel": "gmail"', handled["details_json"])
+        self.assertNotIn(password_link["token"], handled["details_json"])
+
+        with self.assertRaisesRegex(IdentityError, "supported password-link"):
+            self.sessions.record_password_link_handling(
+                user["id"],
+                actor_id=self.owner["id"],
+                action="create",
+                channel="copy",
+            )
 
     def test_legacy_recovery_hash_cannot_authenticate(self) -> None:
         user, _ = self.create_user("legacy-recovery@example.org")
@@ -501,10 +514,8 @@ class IdentityTestCase(unittest.TestCase):
         self.assertIsNone(credential["password_salt"])
 
     def test_initial_password_requires_versioned_user_guide_acknowledgement(self) -> None:
-        user, temporary = self.create_user("guide-reader@example.org")
-        token, _, _, meta = self.sessions.login(
-            user["email"], temporary["temporary_password"]
-        )
+        user, password_link = self.create_user("guide-reader@example.org")
+        token, _, meta = self.sessions.exchange_password_link(password_link["token"])
         self.assertEqual("initial_setup", meta["password_setup_purpose"])
         self.assertTrue(meta["requires_user_guide_acknowledgement"])
 
@@ -536,16 +547,14 @@ class IdentityTestCase(unittest.TestCase):
         )
 
     def test_administrator_reset_revokes_sessions_and_requires_password_replacement(self) -> None:
-        user, temporary = self.create_user()
-        token, _, _, _ = self.activate(user, temporary)
-        reset = self.sessions.issue_temporary_password(
+        user, password_link = self.create_user()
+        token, _, _, _ = self.activate(user, password_link)
+        reset = self.sessions.issue_password_link(
             user["id"], actor_id=self.owner["id"], action="reset"
         )
         with self.assertRaises(IdentityError):
             self.sessions.resolve(token)
-        replacement, _, _, meta = self.sessions.login(
-            user["email"], reset["temporary_password"]
-        )
+        replacement, _, meta = self.sessions.exchange_password_link(reset["token"])
         self.assertTrue(meta["requires_password_change"])
         self.assertEqual("recovery", meta["password_setup_purpose"])
         self.assertFalse(meta["requires_user_guide_acknowledgement"])

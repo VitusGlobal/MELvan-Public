@@ -266,6 +266,7 @@ class RelationalBoundaryTestCase(unittest.TestCase):
                 "corrected_outcome_change_types",
             },
         }
+        tables_added_after_initial = {"password_setup_links"}
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "current.sqlite3"
             Database(path).initialize(
@@ -282,6 +283,8 @@ class RelationalBoundaryTestCase(unittest.TestCase):
                     ).fetchall()
                 ]
                 for table in tables:
+                    if table in tables_added_after_initial:
+                        continue
                     current = {
                         row["name"]
                         for row in connection.execute(
@@ -344,6 +347,17 @@ class RelationalBoundaryTestCase(unittest.TestCase):
         self.assertNotIn("corrected_outcome_change_types", initial)
         self.assertIn('"corrected_outcome_category"', migration)
         self.assertIn('"corrected_outcome_change_types"', migration)
+
+    def test_password_setup_link_migration_is_present(self) -> None:
+        migration = (
+            Path(__file__).resolve().parents[1]
+            / "migrations/versions/0005_password_setup_links.py"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn('"password_setup_links"', migration)
+        self.assertIn('"token_hash"', migration)
+        self.assertIn("'initial_setup', 'recovery'", migration)
+        self.assertIn("temporary_password_expires_at = NULL", migration)
 
 
 @unittest.skipUnless(

@@ -77,13 +77,13 @@ configuration](configuration.md#postgresql-only-configuration).
 Forks inherit workflow definitions only. They do not inherit environments,
 variables, secrets, approvals, identities, domains, or Azure resources.
 
-## Temporary-password sharing
+## Password setup and reset links
 
-MELvan does not require or operate a transactional-email service. Creating a user generates a cryptographically random 12-character temporary password, stores only its strong salted hash, and displays the plaintext once to the responsible Owner or Administrator. An authorized account manager can later reset an eligible account by replacing its current credential with a new temporary password. Passwords are never recovered.
+MELvan does not require or operate a transactional-email service. Creating a user generates a cryptographically random, single-use setup link valid for seven days. Reset generates a single-use link valid for 24 hours after invalidating the prior password, active sessions, lockout, and earlier links. Passwords are never recovered, and MELvan stores only token hashes.
 
-The one-time panel provides **Copy password**, **Email with Gmail**, **Email with Outlook**, and **Email with default app**. Email actions open a pre-addressed draft in the selected user-controlled email service; MELvan does not transmit the message. The account manager is responsible for sharing the temporary password securely. Opening a draft may place the short-lived credential in the browser history or provider compose URL.
+The one-time panel provides **Send link with Gmail**, **Send link with Outlook**, and **Send link with default mail client**. MELvan provides no copy action and does not transmit the message. The account manager reviews and sends the prepared draft. Opening a draft may place the short-lived token in browser history or the provider compose URL.
 
-A reset immediately invalidates the prior password, unused temporary credentials, active sessions, authentication lock, and failed-attempt count. Temporary passwords expire after seven days and permit only forced password replacement. Initial setup requires User Guide acknowledgement; reset does not repeat onboarding. Issuance and sharing actions are audited without storing plaintext credentials.
+Setup and reset links are purpose-specific, single-use, independent of user UUIDs, and permit only the restricted password-creation journey. Initial setup requires User Guide acknowledgement; reset does not repeat onboarding. Issuance, sharing channel, exchange, and rejection are audited without storing the token.
 
 ## Deployment
 
@@ -119,9 +119,9 @@ operator environment configured for the deployed data store, run:
 PYTHONPATH=src .venv/bin/python -m melvan.bootstrap_owner
 ```
 
-Record the temporary password securely and replace it at first login. Never put
-temporary or permanent passwords in scripts, logs, tickets, or repository
-files.
+Send the resulting seven-day setup link only to the configured Owner. The Owner
+opens it and creates a permanent password. Never put setup links or passwords
+in scripts, logs, tickets, or repository files.
 
 ## Deployment verification
 

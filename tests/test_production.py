@@ -98,13 +98,12 @@ class ProductionApplicationTestCase(unittest.TestCase):
         return int(str(captured["status"]).split()[0]), content, headers
 
     def test_cookie_session_and_security_headers(self) -> None:
-        temporary = self.application.api.sessions.bootstrap_owner()
+        password_link = self.application.api.sessions.bootstrap_owner()
         status, payload, headers = self.call(
             "POST",
-            "/api/session",
+            "/api/session/password-link",
             {
-                "email": "owner@example.org",
-                "password": temporary["temporary_password"],
+                "token": password_link["token"],
                 "duration": "7_days",
                 "timezone": "UTC",
             },

@@ -251,7 +251,7 @@ async function installRoutes(page) {
         contentType: "application/json",
         body: JSON.stringify({
           user: created,
-          credential: { temporary_password: "Temporary1!", expires_at: "2026-07-25T10:00:00+00:00", action: "create" },
+          password_link: { token: "setup-token", expires_at: "2026-07-25T10:00:00+00:00", action: "create" },
         }),
       });
     }
@@ -262,11 +262,11 @@ async function installRoutes(page) {
         contentType: "application/json",
         body: JSON.stringify({
           user: target,
-          credential: { temporary_password: "Temporary1!", expires_at: "2026-07-25T10:00:00+00:00", action: credentialAction[2] },
+          password_link: { token: "setup-token", expires_at: "2026-07-25T10:00:00+00:00", action: credentialAction[2] },
         }),
       });
     }
-    if (/^\/api\/admin\/users\/[^/]+\/credential-handling$/.test(url.pathname) && request.method() === "POST") {
+    if (/^\/api\/admin\/users\/[^/]+\/password-link-handling$/.test(url.pathname) && request.method() === "POST") {
       return route.fulfill({ contentType: "application/json", body: JSON.stringify({ status: "recorded" }) });
     }
     const ownerWorkspaceUsers = url.pathname.match(/^\/api\/owner\/workspaces\/([^/]+)\/users$/);
@@ -921,12 +921,12 @@ async function signIn(page, email, password = "Password1!") {
     await resetPassword.waitFor();
     admin.once("dialog", (dialog) => dialog.accept());
     await resetPassword.click();
-    await admin.getByRole("heading", { name: "Temporary password for Alex Administrator" }).waitFor();
-    await admin.getByRole("button", { name: "Copy password" }).waitFor();
-    for (const label of ["Email with Gmail", "Email with Outlook", "Email with default app"]) {
+    await admin.getByRole("heading", { name: "Reset link for Alex Administrator" }).waitFor();
+    if (await admin.getByRole("button", { name: "Copy password" }).count()) throw new Error("Password copy remains available.");
+    for (const label of ["Send link with Gmail", "Send link with Outlook", "Send link with default mail client"]) {
       await admin.getByRole("link", { name: label }).waitFor();
     }
-    await admin.getByRole("button", { name: "Close temporary password" }).click();
+    await admin.getByRole("button", { name: "Close password link" }).click();
     const statementsHeading = admin.locator(".users-header > span").filter({ hasText: /^Statements$/ });
     const statementHeadingBox = await statementsHeading.evaluate((element) => element.getBoundingClientRect());
     if (statementHeadingBox.height > 20) throw new Error("Statements heading wraps onto multiple lines.");
@@ -943,10 +943,12 @@ async function signIn(page, email, password = "Password1!") {
     await email.fill("casey@example.org");
     await admin.getByLabel("Workspace nickname").fill("Coastal pilot");
     await admin.getByRole("button", { name: "Create administrator" }).click();
-    await admin.getByRole("heading", { name: "Temporary password for Casey Administrator" }).waitFor();
-    await admin.getByText("Temporary1!", { exact: true }).waitFor();
-    if (!String(await admin.getByRole("link", { name: "Email with Gmail" }).getAttribute("href")).includes("casey%40example.org")) throw new Error("Gmail draft does not target the new user.");
-    await admin.getByRole("button", { name: "Close temporary password" }).click();
+    await admin.getByRole("heading", { name: "Setup link for Casey Administrator" }).waitFor();
+    const gmailLink = admin.getByRole("link", { name: "Send link with Gmail" });
+    const gmailHref = String(await gmailLink.getAttribute("href"));
+    if (!gmailHref.includes("casey%40example.org")) throw new Error("Gmail draft does not target the new user.");
+    if (!gmailHref.includes("password-setup%3Dsetup-token")) throw new Error("Gmail draft does not contain the setup link.");
+    await admin.getByRole("button", { name: "Close password link" }).click();
     await assertNoOverflow(admin, "desktop Users");
     await admin.screenshot({ path: path.join(artifacts, "admin-desktop.png"), fullPage: true });
 

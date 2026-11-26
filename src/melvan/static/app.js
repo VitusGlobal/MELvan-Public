@@ -1,7 +1,10 @@
+const initialLocationHash = window.location.hash.replace("#", "");
 const state = {
   user: null,
   activeRole: null,
-  activeView: window.location.hash.replace("#", "") || null,
+  activeView: initialLocationHash.startsWith("password-setup=")
+    ? null
+    : initialLocationHash || null,
   reviewQueue: "statements",
   review: [],
   evidence: [],
@@ -64,12 +67,36 @@ let recordingStartedAt = 0;
 let recordingTimer = null;
 const MAX_VOICE_SECONDS = 60;
 let cameraStream = null;
-let visibleCredential = null;
+let visiblePasswordLink = null;
 
 document.addEventListener("DOMContentLoaded", async () => {
   bindLogin();
   bindShell();
   refreshIcons();
+  const passwordLinkToken = initialLocationHash.startsWith("password-setup=")
+    ? decodeURIComponent(initialLocationHash.slice("password-setup=".length))
+    : null;
+  if (passwordLinkToken) {
+    window.history.replaceState(null, "", `${window.location.pathname}${window.location.search}`);
+    try {
+      const session = await api("/api/session/password-link", {
+        method: "POST",
+        body: {
+          token: passwordLinkToken,
+          duration: "midnight",
+          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",
+        },
+        anonymous: true,
+      });
+      await continueSession(session);
+      return;
+    } catch (error) {
+      clearSession();
+      showLogin();
+      rejectLogin(error.message);
+      return;
+    }
+  }
   try {
     const session = await api("/api/session");
     await continueSession(session);
@@ -90,12 +117,11 @@ function bindLogin() {
     event.preventDefault();
     closeUserGuide();
   });
-  $("#copy-temporary-password").addEventListener("click", copyTemporaryPassword);
-  $$("[data-credential-share]").forEach((link) => link.addEventListener("click", recordCredentialShare));
-  $$("[data-close-credential]").forEach((button) => button.addEventListener("click", closeTemporaryPassword));
-  $("#temporary-password-dialog").addEventListener("cancel", (event) => {
+  $$("[data-password-link-share]").forEach((link) => link.addEventListener("click", recordPasswordLinkShare));
+  $$("[data-close-password-link]").forEach((button) => button.addEventListener("click", closePasswordLink));
+  $("#password-link-dialog").addEventListener("cancel", (event) => {
     event.preventDefault();
-    closeTemporaryPassword();
+    closePasswordLink();
   });
 }
 
@@ -2195,7 +2221,7 @@ async function submitUserForm(event) {
     $("#user-form-region").hidden = true;
     showToast(userId ? "User updated." : "User created.");
     await refreshData();
-    if (!userId && payload.credential) showTemporaryPassword(payload.user, payload.credential);
+    if (!userId && payload.password_link) showPasswordLink(payload.user, payload.password_link);
   } catch (error) {
     showToast(error.message, true);
   }
@@ -2245,14 +2271,14 @@ async function handleUserClick(event) {
     const verb = action === "create" ? "Create" : "Reset";
     const warning = action === "reset"
       ? `Reset the password for ${user.first_name} ${user.last_name}? Their current password and active sessions will stop working immediately.`
-      : `Create a temporary password for ${user.first_name} ${user.last_name}?`;
+      : `Create a password setup link for ${user.first_name} ${user.last_name}?`;
     if (!window.confirm(warning)) return;
     button.disabled = true;
     try {
       const payload = await api(`/api/admin/users/${encodeURIComponent(user.id)}/${action}-password`, { method: "POST", body: {} });
       await refreshData();
-      showTemporaryPassword(payload.user, payload.credential);
-      showToast(`${verb} password completed.`);
+      showPasswordLink(payload.user, payload.password_link);
+      showToast(`${verb} password link created.`);
     } catch (error) {
       showToast(error.message, true);
     } finally {
@@ -2281,14 +2307,19 @@ async function handleUserClick(event) {
   }
 }
 
-function temporaryPasswordMessage(user, credential) {
-  const action = credential.action === "create" ? "created" : "reset";
-  return `Hello ${user.first_name},\n\nYour MELvan password has been ${action}.\n\nTemporary password: ${credential.temporary_password}\n\nIt expires in 7 days. Sign in to MELvan and create a new password before continuing.`;
+function passwordSetupUrl(passwordLink) {
+  const base = `${window.location.origin}${window.location.pathname}`;
+  return `${base}#password-setup=${encodeURIComponent(passwordLink.token)}`;
 }
 
-function credentialShareUrl(provider, user, credential) {
-  const subject = credential.action === "create" ? "Your MELvan account" : "Your MELvan password reset";
-  const body = temporaryPasswordMessage(user, credential);
+function passwordLinkMessage(user, passwordLink) {
+  const purpose = passwordLink.action === "create" ? "set up your MELvan account" : "reset your MELvan password";
+  return `Hello ${user.first_name},\n\nUse this single-use link to ${purpose}:\n\n${passwordSetupUrl(passwordLink)}\n\nThe link expires ${formatDate(passwordLink.expires_at)}. If you were not expecting this message, do not use the link.`;
+}
+
+function passwordLinkShareUrl(provider, user, passwordLink) {
+  const subject = passwordLink.action === "create" ? "Set up your MELvan account" : "Reset your MELvan password";
+  const body = passwordLinkMessage(user, passwordLink);
   if (provider === "gmail") {
     return `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(user.email)}&su=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
   }
@@ -2298,51 +2329,42 @@ function credentialShareUrl(provider, user, credential) {
   return `mailto:${encodeURIComponent(user.email)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
 }
 
-function showTemporaryPassword(user, credential) {
-  visibleCredential = { user, credential };
-  $("#temporary-password-eyebrow").textContent = credential.action === "create" ? "Password created" : "Password reset";
-  $("#temporary-password-title").textContent = `Temporary password for ${user.first_name} ${user.last_name}`;
-  $("#temporary-password-copy").textContent = `Share this temporary password with ${user.email}. They must replace it when they sign in.`;
-  $("#temporary-password-value").textContent = credential.temporary_password;
-  $("#temporary-password-expiry").textContent = `Expires ${formatDate(credential.expires_at)}.`;
-  $("#email-with-gmail").href = credentialShareUrl("gmail", user, credential);
-  $("#email-with-outlook").href = credentialShareUrl("outlook", user, credential);
-  $("#email-with-default-app").href = credentialShareUrl("default", user, credential);
-  const dialog = $("#temporary-password-dialog");
+function showPasswordLink(user, passwordLink) {
+  visiblePasswordLink = { user, passwordLink };
+  $("#password-link-eyebrow").textContent = passwordLink.action === "create" ? "Account created" : "Password reset";
+  $("#password-link-title").textContent = `${passwordLink.action === "create" ? "Setup" : "Reset"} link for ${user.first_name} ${user.last_name}`;
+  $("#password-link-copy").textContent = `Choose how to send the single-use link to ${user.email}.`;
+  $("#password-link-expiry").textContent = `Expires ${formatDate(passwordLink.expires_at)}.`;
+  $("#email-with-gmail").href = passwordLinkShareUrl("gmail", user, passwordLink);
+  $("#email-with-outlook").href = passwordLinkShareUrl("outlook", user, passwordLink);
+  $("#email-with-default-app").href = passwordLinkShareUrl("default", user, passwordLink);
+  const dialog = $("#password-link-dialog");
   dialog.showModal();
   refreshIcons();
-  $("#copy-temporary-password").focus();
+  $("#email-with-gmail").focus();
 }
 
-function closeTemporaryPassword() {
-  const dialog = $("#temporary-password-dialog");
+function closePasswordLink() {
+  const dialog = $("#password-link-dialog");
   if (dialog.open) dialog.close();
-  $("#temporary-password-value").textContent = "";
-  visibleCredential = null;
+  visiblePasswordLink = null;
 }
 
-async function copyTemporaryPassword() {
-  if (!visibleCredential) return;
-  await navigator.clipboard.writeText(visibleCredential.credential.temporary_password);
-  await recordCredentialHandling("copy");
-  showToast("Temporary password copied.");
-}
-
-async function recordCredentialHandling(channel) {
-  if (!visibleCredential) return;
+async function recordPasswordLinkHandling(channel) {
+  if (!visiblePasswordLink) return;
   try {
-    await api(`/api/admin/users/${encodeURIComponent(visibleCredential.user.id)}/credential-handling`, {
+    await api(`/api/admin/users/${encodeURIComponent(visiblePasswordLink.user.id)}/password-link-handling`, {
       method: "POST",
-      body: { action: visibleCredential.credential.action, channel },
+      body: { action: visiblePasswordLink.passwordLink.action, channel },
     });
   } catch (error) {
     showToast(`The sharing action opened, but MELvan could not record it: ${error.message}`, true);
   }
 }
 
-function recordCredentialShare(event) {
-  const channel = event.currentTarget.dataset.credentialShare;
-  void recordCredentialHandling(channel);
+function recordPasswordLinkShare(event) {
+  const channel = event.currentTarget.dataset.passwordLinkShare;
+  void recordPasswordLinkHandling(channel);
 }
 
 async function handleReviewClick(event) {

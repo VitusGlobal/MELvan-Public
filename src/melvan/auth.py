@@ -6,7 +6,6 @@ import hashlib
 import hmac
 import json
 import secrets
-import string
 import uuid
 from datetime import datetime, time, timedelta, timezone
 from typing import Any
@@ -16,8 +15,8 @@ from .db import DatabaseAdapter
 from .identity import IdentityError, UserDirectory
 
 
-TEMPORARY_PASSWORD_LENGTH = 12
-TEMPORARY_PASSWORD_DAYS = 7
+INITIAL_SETUP_LINK_DAYS = 7
+RESET_LINK_HOURS = 24
 PASSWORD_CHANGE_SESSION_MINUTES = 15
 MAX_PASSWORD_ATTEMPTS = 3
 LOCK_HOURS = 24
@@ -74,7 +73,7 @@ class SessionStore:
             allow_administrator=allow_administrator,
         )
 
-    def issue_temporary_password(
+    def issue_password_link(
         self,
         user_id: str,
         *,
@@ -82,11 +81,11 @@ class SessionStore:
         action: str,
     ) -> dict[str, str]:
         if action not in {"create", "reset"}:
-            raise IdentityError("Choose create or reset for the temporary password.")
+            raise IdentityError("Choose create or reset for the password link.")
         user = self.users.get_user(user_id)
         if user["status"] != "active" or user.get("effective_status") != "active":
             raise IdentityError(
-                "Temporary passwords can be issued only for active accounts.", status=409
+                "Password links can be issued only for active accounts.", status=409
             )
         expected_action = (
             "create"
@@ -98,44 +97,74 @@ class SessionStore:
             raise IdentityError(
                 f"This account requires the {expected_action} password action.", status=409
             )
-        temporary = self._temporary_password()
-        salt, password_hash = self._password_material(temporary)
-        expires_at = timestamp(utc_now() + timedelta(days=TEMPORARY_PASSWORD_DAYS))
+        token = secrets.token_urlsafe(32)
+        token_hash = self._token_hash(token)
+        purpose = "initial_setup" if action == "create" else "recovery"
+        now = utc_now()
+        lifetime = (
+            timedelta(days=INITIAL_SETUP_LINK_DAYS)
+            if action == "create"
+            else timedelta(hours=RESET_LINK_HOURS)
+        )
+        expires_at = timestamp(now + lifetime)
         with self.database.connection() as connection:
             connection.execute(
                 """
                 UPDATE users
-                SET password_salt = ?, password_hash = ?,
+                SET password_salt = NULL, password_hash = NULL,
                     password_state = 'password_change_required',
-                    temporary_password_expires_at = ?,
+                    temporary_password_expires_at = NULL,
                     recovery_salt = NULL, recovery_hash = NULL,
                     recovery_expires_at = NULL, failed_login_attempts = 0,
                     updated_at = ?
                 WHERE id = ?
                 """,
-                (salt, password_hash, expires_at, timestamp(utc_now()), user_id),
+                (timestamp(now), user_id),
             )
             self._revoke_user_in_connection(connection, user_id)
+            connection.execute(
+                """
+                UPDATE password_setup_links SET revoked_at = ?
+                WHERE user_id = ? AND used_at IS NULL AND revoked_at IS NULL
+                """,
+                (timestamp(now), user_id),
+            )
+            connection.execute(
+                """
+                INSERT INTO password_setup_links
+                    (token_hash, user_id, purpose, created_by, created_at,
+                     expires_at, used_at, revoked_at)
+                VALUES (?, ?, ?, ?, ?, ?, NULL, NULL)
+                """,
+                (
+                    token_hash,
+                    user_id,
+                    purpose,
+                    actor_id,
+                    timestamp(now),
+                    expires_at,
+                ),
+            )
             self._clear_lock(connection, user_id)
             self._event(
                 connection,
-                "temporary_password_issued",
+                "password_setup_link_issued",
                 user_id,
                 "revealed_once",
                 {
-                    "purpose": "initial_setup" if action == "create" else "recovery",
+                    "purpose": purpose,
                     "action": action,
                     "actor_id": actor_id,
                     "expires_at": expires_at,
                 },
             )
         return {
-            "temporary_password": temporary,
+            "token": token,
             "expires_at": expires_at,
             "action": action,
         }
 
-    def record_temporary_password_handling(
+    def record_password_link_handling(
         self,
         user_id: str,
         *,
@@ -144,14 +173,14 @@ class SessionStore:
         channel: str,
     ) -> None:
         if action not in {"create", "reset"}:
-            raise IdentityError("Choose create or reset for the temporary password.")
-        if channel not in {"copy", "gmail", "outlook", "default_mail_app"}:
-            raise IdentityError("Choose a supported temporary-password sharing option.")
+            raise IdentityError("Choose create or reset for the password link.")
+        if channel not in {"gmail", "outlook", "default_mail_app"}:
+            raise IdentityError("Choose a supported password-link sharing option.")
         self.users.get_user(user_id)
         with self.database.connection() as connection:
             self._event(
                 connection,
-                "temporary_password_handled",
+                "password_setup_link_shared",
                 user_id,
                 "succeeded",
                 {
@@ -161,47 +190,104 @@ class SessionStore:
                 },
             )
 
-    def _issue_owner_bootstrap_password(self, user_id: str) -> dict[str, str]:
+    def _issue_owner_bootstrap_link(self, user_id: str) -> dict[str, str]:
         user = self.users.get_user(user_id)
         if user["status"] != "active":
             raise IdentityError("Owner bootstrap is available only for an active user.", status=409)
-        temporary = self._temporary_password()
-        salt, password_hash = self._password_material(temporary)
-        expires_at = timestamp(utc_now() + timedelta(days=TEMPORARY_PASSWORD_DAYS))
-        with self.database.connection() as connection:
-            connection.execute(
-                """
-                UPDATE users
-                SET password_salt = ?, password_hash = ?,
-                    password_state = 'password_change_required',
-                    temporary_password_expires_at = ?,
-                    recovery_salt = NULL, recovery_hash = NULL,
-                    recovery_expires_at = NULL, failed_login_attempts = 0,
-                    updated_at = ?
-                WHERE id = ?
-                """,
-                (salt, password_hash, expires_at, timestamp(utc_now()), user_id),
-            )
-            self._revoke_user_in_connection(connection, user_id)
-            self._clear_lock(connection, user_id)
-            self._event(
-                connection,
-                "temporary_password_issued",
-                user_id,
-                "revealed_once",
-                {
-                    "purpose": "owner_bootstrap",
-                    "actor_id": "deployment-operator",
-                    "expires_at": expires_at,
-                },
-            )
-        return {"temporary_password": temporary, "expires_at": expires_at}
+        return self.issue_password_link(
+            user_id,
+            actor_id="deployment-operator",
+            action="create",
+        )
 
     def bootstrap_owner(self) -> dict[str, str]:
         owner = self.users.owner()
         if owner["password_state"] != "bootstrap_required":
             raise IdentityError("The Owner credential has already been initialized.", status=409)
-        return self._issue_owner_bootstrap_password(owner["id"])
+        return self._issue_owner_bootstrap_link(owner["id"])
+
+    def exchange_password_link(
+        self,
+        raw_token: str,
+        *,
+        duration_choice: str = "midnight",
+        timezone_name: str = "UTC",
+    ) -> tuple[str, dict[str, Any], dict[str, Any]]:
+        choice, zone, requested_expiry = self._session_expiry(
+            duration_choice, timezone_name
+        )
+        now = utc_now()
+        token_hash = self._token_hash(str(raw_token or ""))
+        with self.database.connection() as connection:
+            link = connection.execute(
+                """
+                SELECT link.*, users.status AS user_status,
+                       workspaces.status AS workspace_status
+                FROM password_setup_links AS link
+                JOIN users ON users.id = link.user_id
+                JOIN workspace_memberships AS membership
+                  ON membership.user_id = users.id
+                JOIN workspaces ON workspaces.id = membership.workspace_id
+                WHERE link.token_hash = ?
+                """,
+                (token_hash,),
+            ).fetchone()
+            invalid = (
+                not link
+                or link["used_at"] is not None
+                or link["revoked_at"] is not None
+                or link["expires_at"] <= timestamp(now)
+                or link["user_status"] != "active"
+                or link["workspace_status"] != "active"
+            )
+            if not invalid:
+                user = self.users.get_user(link["user_id"])
+                restricted_expiry = min(
+                    now + timedelta(minutes=PASSWORD_CHANGE_SESSION_MINUTES),
+                    requested_expiry,
+                )
+                session_token = self._create_session(
+                    connection,
+                    user,
+                    active_role=None,
+                    workspace_id=user["workspace_id"],
+                    session_kind="password_change",
+                    password_setup_purpose=link["purpose"],
+                    duration_choice=choice,
+                    timezone_name=zone,
+                    expires_at=restricted_expiry,
+                    requested_expires_at=requested_expiry,
+                )
+                connection.execute(
+                    "UPDATE password_setup_links SET used_at = ? WHERE token_hash = ?",
+                    (timestamp(now), token_hash),
+                )
+                self._event(
+                    connection,
+                    "password_setup_link_exchange",
+                    user["id"],
+                    "succeeded",
+                    {"purpose": link["purpose"]},
+                )
+        if invalid:
+            self._authentication_event(
+                "password_setup_link_exchange",
+                link["user_id"] if link else None,
+                "denied",
+                {"reason": "invalid_expired_used_or_suspended"},
+            )
+            raise IdentityError(
+                "This password link is invalid or has expired.", status=401
+            )
+        return session_token, user, {
+            "expires_at": timestamp(restricted_expiry),
+            "requested_expires_at": timestamp(requested_expiry),
+            "requires_password_change": True,
+            "password_setup_purpose": link["purpose"],
+            "requires_user_guide_acknowledgement": (
+                link["purpose"] == "initial_setup"
+            ),
+        }
 
     def login(
         self,
@@ -654,23 +740,6 @@ class SessionStore:
     def _password_matches(self, salt_hex: str, expected: str, password: str) -> bool:
         actual = self._password_hash(str(password or ""), bytes.fromhex(salt_hex))
         return hmac.compare_digest(actual, expected)
-
-    @staticmethod
-    def _temporary_password() -> str:
-        groups = (
-            string.ascii_uppercase,
-            string.ascii_lowercase,
-            string.digits,
-            "!@#$%^&*()-_=+",
-        )
-        characters = [secrets.choice(group) for group in groups]
-        alphabet = "".join(groups)
-        characters.extend(
-            secrets.choice(alphabet)
-            for _ in range(TEMPORARY_PASSWORD_LENGTH - len(characters))
-        )
-        secrets.SystemRandom().shuffle(characters)
-        return "".join(characters)
 
     @staticmethod
     def _validate_permanent_password(password: str) -> None:

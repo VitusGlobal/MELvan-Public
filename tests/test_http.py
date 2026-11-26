@@ -31,10 +31,10 @@ class HTTPTestCase(unittest.TestCase):
         service.initialize()
         self.api = APIApplication(service)
         self.passwords: dict[str, str] = {}
-        owner_temporary = self.api.sessions.bootstrap_owner()["temporary_password"]
+        owner_link = self.api.sessions.bootstrap_owner()
         status, admin_session = self.login(
             "owner@example.org",
-            temporary_password=owner_temporary,
+            password_link=owner_link,
             new_password="OwnerStrong1!",
         )
         self.assertEqual(200, status)
@@ -66,7 +66,7 @@ class HTTPTestCase(unittest.TestCase):
             self.admin_token,
         )
         self.assertEqual(201, status)
-        dual_temporary = dual_created["credential"]["temporary_password"]
+        dual_link = dual_created["password_link"]
         status, reviewer_created = self.api.dispatch(
             "POST",
             "/api/admin/users",
@@ -79,10 +79,10 @@ class HTTPTestCase(unittest.TestCase):
             self.admin_token,
         )
         self.assertEqual(201, status)
-        reviewer_temporary = reviewer_created["credential"]["temporary_password"]
+        reviewer_link = reviewer_created["password_link"]
         status, session = self.login(
             "dana@example.org",
-            temporary_password=dual_temporary,
+            password_link=dual_link,
             new_password="DanaStrong1!",
         )
         self.assertEqual(200, status)
@@ -95,7 +95,7 @@ class HTTPTestCase(unittest.TestCase):
         self.assertEqual("reporter", selected["active_role"])
         status, reviewer_session = self.login(
             "reva@example.org",
-            temporary_password=reviewer_temporary,
+            password_link=reviewer_link,
             new_password="RevaStrong1!",
         )
         self.reviewer_token = reviewer_session["token"]
@@ -139,22 +139,33 @@ class HTTPTestCase(unittest.TestCase):
         self,
         email: str,
         *,
-        temporary_password: str | None = None,
+        password_link: dict | None = None,
         new_password: str | None = None,
     ) -> tuple[int, dict]:
-        password = temporary_password or self.passwords.get(email) or (
+        password = self.passwords.get(email) or (
             "OwnerStrong1!" if email == "admin@melvan.local" else ""
         )
-        status, result = self.api.dispatch(
-            "POST",
-            "/api/session",
-            {
-                "email": email,
-                "password": password,
-                "duration": "7_days",
-                "timezone": "UTC",
-            },
-        )
+        if password_link:
+            status, result = self.api.dispatch(
+                "POST",
+                "/api/session/password-link",
+                {
+                    "token": password_link["token"],
+                    "duration": "7_days",
+                    "timezone": "UTC",
+                },
+            )
+        else:
+            status, result = self.api.dispatch(
+                "POST",
+                "/api/session",
+                {
+                    "email": email,
+                    "password": password,
+                    "duration": "7_days",
+                    "timezone": "UTC",
+                },
+            )
         if status != 200 or not result.get("requires_password_change"):
             return status, result
         replacement = new_password or f"Valid{len(self.passwords) + 1}Pass!"
@@ -278,7 +289,7 @@ class HTTPTestCase(unittest.TestCase):
             self.admin_token,
         )
         self.assertEqual(200, status)
-        self.assertEqual("reset", replacement["credential"]["action"])
+        self.assertEqual("reset", replacement["password_link"]["action"])
         self.assertNotIn(dana["id"], self.api.sessions.user_lock_statuses())
 
     def test_email_or_role_change_revokes_existing_session(self) -> None:
@@ -626,9 +637,9 @@ class HTTPTestCase(unittest.TestCase):
             f"/api/admin/users/{dana['id']}/reset-password", {}, self.admin_token
         )
         self.assertEqual(200, status)
-        self.assertEqual("reset", replacement["credential"]["action"])
+        self.assertEqual("reset", replacement["password_link"]["action"])
         status, handled = self.request(
-            f"/api/admin/users/{dana['id']}/credential-handling",
+            f"/api/admin/users/{dana['id']}/password-link-handling",
             {"action": "reset", "channel": "gmail"},
             self.admin_token,
         )
@@ -639,7 +650,7 @@ class HTTPTestCase(unittest.TestCase):
         )
         self.assertEqual(403, status)
         status, _ = self.request(
-            f"/api/admin/users/{dana['id']}/credential-handling",
+            f"/api/admin/users/{dana['id']}/password-link-handling",
             {"action": "reset", "channel": "copy"},
             self.reviewer_token,
         )
@@ -674,13 +685,12 @@ class HTTPTestCase(unittest.TestCase):
         )
         self.assertEqual(201, status)
         self.assertEqual("password_change_required", created["user"]["password_state"])
-        temporary_password = created["credential"]["temporary_password"]
+        password_link = created["password_link"]
         status, restricted = self.api.dispatch(
             "POST",
-            "/api/session",
+            "/api/session/password-link",
             {
-                "email": "guide@example.org",
-                "password": temporary_password,
+                "token": password_link["token"],
                 "duration": "7_days",
                 "timezone": "UTC",
             },
@@ -688,6 +698,13 @@ class HTTPTestCase(unittest.TestCase):
         self.assertEqual(200, status)
         self.assertEqual("initial_setup", restricted["password_setup_purpose"])
         self.assertTrue(restricted["requires_user_guide_acknowledgement"])
+        status, rejected_link = self.api.dispatch(
+            "POST",
+            "/api/session/password-link",
+            {"token": password_link["token"], "timezone": "UTC"},
+        )
+        self.assertEqual(401, status)
+        self.assertIn("invalid or has expired", rejected_link["error"])
 
         status, refreshed = self.api.dispatch(
             "GET", "/api/session", token=restricted["token"]

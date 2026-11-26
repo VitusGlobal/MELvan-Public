@@ -600,6 +600,21 @@ CREATE TABLE IF NOT EXISTS authenticated_sessions (
 CREATE INDEX IF NOT EXISTS authenticated_sessions_user
 ON authenticated_sessions(user_id, expires_at);
 
+CREATE TABLE IF NOT EXISTS password_setup_links (
+    token_hash TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    purpose TEXT NOT NULL CHECK (purpose IN ('initial_setup', 'recovery')),
+    created_by TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    expires_at TEXT NOT NULL,
+    used_at TEXT,
+    revoked_at TEXT,
+    FOREIGN KEY (user_id) REFERENCES users(id)
+);
+
+CREATE INDEX IF NOT EXISTS password_setup_links_user
+ON password_setup_links(user_id, expires_at);
+
 CREATE TABLE IF NOT EXISTS authentication_events (
     id TEXT PRIMARY KEY,
     event_type TEXT NOT NULL,
@@ -1340,6 +1355,15 @@ class Database:
                 connection.execute(
                     f"ALTER TABLE authenticated_sessions ADD COLUMN {name} {declaration}"
                 )
+        connection.execute(
+            """
+            UPDATE users
+            SET password_salt = NULL, password_hash = NULL,
+                temporary_password_expires_at = NULL
+            WHERE password_state = 'password_change_required'
+              AND temporary_password_expires_at IS NOT NULL
+            """
+        )
         connection.execute(
             """
             UPDATE authenticated_sessions

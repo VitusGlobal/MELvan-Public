@@ -30,8 +30,8 @@ class DemoResetTestCase(unittest.TestCase):
                 database,
                 pepper="database-backfill-test-pepper",
             )
-            temporary = sessions.bootstrap_owner()["temporary_password"]
-            token, _, _, _ = sessions.login("owner@example.org", temporary)
+            password_link = sessions.bootstrap_owner()
+            token, _, _ = sessions.exchange_password_link(password_link["token"])
             with database.connection() as connection:
                 connection.execute(
                     """

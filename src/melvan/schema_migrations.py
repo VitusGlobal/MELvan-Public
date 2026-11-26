@@ -8,7 +8,7 @@ from pathlib import Path
 from .config import PROJECT_ROOT
 
 
-HEAD_REVISION = "0004"
+HEAD_REVISION = "0005"
 
 
 def _config(database_url: str):

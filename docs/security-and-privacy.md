@@ -3,22 +3,25 @@
 ## Identity
 
 MELvan uses unique email usernames, strong salted password hashes, a hosted
-pepper, revocable server-side sessions, account lockout, and mandatory password
-replacement after temporary-password authentication. Passwords cannot be
-recovered. Authorized account managers can replace a credential with a
-one-time-displayed temporary password; reset revokes prior credentials and
-sessions immediately.
+pepper, revocable server-side sessions, account lockout, and purpose-specific,
+single-use password setup links. Passwords cannot be recovered. Initial setup
+links expire after seven days. Authorized account managers can replace a
+credential and sessions with a reset link that expires after 24 hours.
 
 Initial password creation requires server-validated acknowledgement of the
 current MELVan User Guide. MELVan records the guide version in the
 authentication audit trail. Reset sessions are explicitly distinguished from
-initial setup and do not repeat the acknowledgement. Temporary-password
-issuance and sharing actions are audited without storing plaintext.
+initial setup and do not repeat the acknowledgement. Link tokens contain at
+least 256 bits of secure randomness, are independent of user UUIDs, and are
+stored only as HMAC hashes. Issuance, sharing channel, exchange, and rejection
+are audited without storing the token.
 Legacy recovery columns may remain inert for upgrade compatibility, but login
 does not evaluate them and no maintained endpoint writes a usable recovery credential.
 
-Hosted cookies are `HttpOnly`, `Secure`, and `SameSite=Strict`. MELvan does not
-store plaintext passwords or bearer tokens in browser storage.
+Hosted cookies are `HttpOnly`, `Secure`, and `SameSite=Strict`. A link token is
+carried in the URL fragment and removed before exchange, so it is not sent in
+the ordinary page request. MELvan does not store plaintext passwords or bearer
+tokens in browser application storage.
 
 ## Authorization
 

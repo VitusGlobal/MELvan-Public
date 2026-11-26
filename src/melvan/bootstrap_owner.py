@@ -34,11 +34,16 @@ def main() -> int:
         pepper=str(settings.auth_pepper),
     )
     credential = sessions.bootstrap_owner()
+    setup_link = (
+        f"{str(settings.public_base_url).rstrip('/')}/"
+        f"#password-setup={credential['token']}"
+    )
     print(
         json.dumps(
             {
                 "owner_email": users.owner()["email"],
-                **credential,
+                "setup_link": setup_link,
+                "expires_at": credential["expires_at"],
             },
             ensure_ascii=True,
         )

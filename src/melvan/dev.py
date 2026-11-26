@@ -39,7 +39,7 @@ def parser() -> argparse.ArgumentParser:
     value.add_argument(
         "--bootstrap-owner",
         action="store_true",
-        help="Issue the Owner's initial temporary password and show it once.",
+        help="Issue the Owner's initial password setup link and show it once.",
     )
     value.add_argument("--check", action="store_true", help="Run startup checks and exit.")
     return value
@@ -80,9 +80,13 @@ def main(argv: list[str] | None = None) -> int:
         )
         if args.bootstrap_owner:
             credential = sessions.bootstrap_owner()
+            setup_link = (
+                f"http://{settings.host}:{settings.port}/"
+                f"#password-setup={credential['token']}"
+            )
             print(
-                "Owner temporary password: "
-                f"{credential['temporary_password']} "
+                "Owner password setup link: "
+                f"{setup_link} "
                 f"(expires {credential['expires_at']})"
             )
         status = service.health()
